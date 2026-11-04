@@ -19,7 +19,7 @@ button_pattern = re.compile(
 (?P=indent)\}"""
 )
 text, button_count = button_pattern.subn(
-    lambda m: f"{m.group('indent')}configuration = .gray()", text
+    "configuration = .gray()", text
 )
 if button_count not in (0, 2):
     raise SystemExit(f"expected 2 iOS 26 glass button blocks or 0 if already patched; found {button_count}")
