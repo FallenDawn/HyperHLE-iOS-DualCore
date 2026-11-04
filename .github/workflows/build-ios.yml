@@ -110,6 +110,8 @@ jobs:
 
       - name: Build iOS host and HyperHLE core
         working-directory: upstream/HyperHLE-Reborn
+        env:
+          CXXFLAGS: -std=c++17
         run: sh platform/ios/scripts/build-host.sh iphoneos Release
 
       - name: Package and verify Core A baseline IPAs
@@ -159,6 +161,7 @@ jobs:
         working-directory: upstream/HyperHLE-Reborn
         env:
           TOUCHHLE_CORE_REPO: ${{ github.workspace }}/upstream/touchHLE
+          CXXFLAGS: -std=c++17
         run: |
           sh platform/ios/scripts/build-host.sh iphoneos Release
 
