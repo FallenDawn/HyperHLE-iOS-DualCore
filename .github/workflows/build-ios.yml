@@ -11,7 +11,8 @@ permissions:
 
 concurrency:
   group: ios-build-${{ github.ref }}
-  cancel-in-progress: false
+  # A newer Core B fix supersedes an older build; do not let stale runs block it.
+  cancel-in-progress: true
 
 jobs:
   verify-upstreams:
