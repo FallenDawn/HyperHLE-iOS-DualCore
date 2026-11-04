@@ -12,15 +12,11 @@ text = path.read_text()
 
 # UIButton.Configuration.glass() is unavailable in the iOS 18 SDK.
 button_pattern = re.compile(
-    r"""if #available\(iOS 26\.0, \*\) \{
-(?P<indent>\s*)configuration = \.glass\(\)
-(?P=indent)\} else \{
-(?P=indent)configuration = \.gray\(\)
-(?P=indent)\}"""
+    r"if #available\\(iOS 26\\.0, \\*\\) \\{\\s*"
+    r"configuration = \\.glass\\(\\)\\s*"
+    r"\\} else \\{\\s*configuration = \\.gray\\(\\)\\s*\\}"
 )
-text, button_count = button_pattern.subn(
-    "configuration = .gray()", text
-)
+text, button_count = button_pattern.subn("configuration = .gray()", text)
 if button_count not in (0, 2):
     raise SystemExit(f"expected 2 iOS 26 glass button blocks or 0 if already patched; found {button_count}")
 if button_count == 0 and ".glass()" in text:
