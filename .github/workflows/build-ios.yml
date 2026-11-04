@@ -141,6 +141,17 @@ jobs:
           grep -q 'pub fn request_host_exit' upstream/touchHLE/src/lib.rs
           grep -q 'touchhle_ios_run_game' upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
 
+      - name: Prepare Core B Dynarmic JIT patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/patch-hyperhle-build-rust.py upstream/HyperHLE-Reborn/platform/ios/scripts/build-rust.sh
+          patched="$(sh upstream/HyperHLE-Reborn/platform/ios/scripts/patched-source.sh \
+            upstream/touchHLE/vendor/dynarmic \
+            upstream/HyperHLE-Reborn/platform/ios/patches/dynarmic-ios-jit.patch \
+            upstream/touchHLE/build/dynarmic-ios-src)"
+          echo "TOUCHHLE_DYNARMIC_DIR=$GITHUB_WORKSPACE/$patched" >> "$GITHUB_ENV"
+
       - name: Build dual-core iOS host (Core A + Core B)
         working-directory: upstream/HyperHLE-Reborn
         env:
