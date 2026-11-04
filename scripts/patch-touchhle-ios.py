@@ -99,6 +99,12 @@ fn take_host_exit_request() -> bool {
 }
 '''
     replace_once("src/lib.rs", "pub use touchHLE_version::*;\n", "pub use touchHLE_version::*;\n" + lib_insert, "iOS lifecycle and metadata API")
+    replace_once(
+        "src/cpu/dynarmic_wrapper/build.rs",
+        '    let dynarmic_root = workspace_root.join("vendor/dynarmic");',
+        '    let dynarmic_root = env::var_os("TOUCHHLE_DYNARMIC_DIR")\\n        .map(std::path::PathBuf::from)\\n        .unwrap_or_else(|| workspace_root.join("vendor/dynarmic"));',
+        "external patched Dynarmic source override",
+    )
 
     replace_once(
         "src/environment.rs",
