@@ -20,12 +20,17 @@ Last checked: 2026-11-04
 - [x] Core A baseline build completed successfully (user-confirmed).
 - [x] Core A physical-device launch/runtime validation on one iPad running iOS 15 (user-confirmed).
 - [ ] Confirm exact Xcode/macOS runner compatibility and all external build dependencies.
-- [ ] Implement a dedicated iOS entry crate/adapter for official touchHLE v0.3.0. See [CORE_B_PORT_AUDIT.md](CORE_B_PORT_AUDIT.md) for the audited integration boundary and reference port.
-- [ ] Prove touchHLE can coexist with the host's SDL2/UIKit ownership model without duplicate SDL runtime/UIApplicationDelegate.
+- [x] Add a dedicated Rust iOS entry crate and C ABI adapter source for official touchHLE v0.3.0.
+- [x] Add a build-time patcher for iOS lifecycle exit, metadata inspection, bundle resources, Documents storage, per-core options and dynamic SDL2.
+- [x] Add a dual-core CI path and Core B dylib export/linkage/minimum-iOS checks.
+- [ ] Confirm the patcher and adapter compile successfully against official touchHLE v0.3.0. See [CORE_B_IMPLEMENTATION.md](CORE_B_IMPLEMENTATION.md).
+- [ ] Prove touchHLE can coexist with the host's SDL2/UIKit ownership model without duplicate SDL runtime/UIApplicationDelegate (CI linkage checks are authored but not yet confirmed).
 - [ ] Implement host-side core picker and per-game core selection.
 - [ ] Validate file import, game launch, touch/controller input, orientation, audio, graphics, app lifecycle and persistence for both cores.
-- [ ] Validate JIT entitlements and behavior on representative iOS 15 TrollStore devices (including A11 and A12+ distinctions).
-- [ ] Produce and test a dual-core IPA on physical hardware.
+- [ ] Confirm the HyperHLE iOS JIT patch applies to touchHLE's separately maintained Dynarmic submodule and builds successfully.
+- [ ] Validate JIT entitlements and behavior on the target iPad running iOS 15.
+- [ ] Produce a successful dual-core IPA in CI.
+- [ ] Test Core B and rerun the Core A regression checklist on the target iPad.
 
 ## Release gate
 
