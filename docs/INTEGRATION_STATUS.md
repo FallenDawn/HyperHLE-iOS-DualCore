@@ -17,10 +17,12 @@ Last checked: 2026-11-05
 - [x] Core B links against the host's shared SDL2 and declares iOS 15.0 as its minimum deployment target.
 - [x] Dual-core TrollStore IPA packaging completed successfully (Run #33).
 - [x] Host core picker and per-game selection use the installed dylibs; the secondary entry is relabelled touchHLE v0.3.0.
-- [ ] The follow-up CI run must confirm the final labelled IPA contains both expected core dylibs.
+- [ ] The follow-up CI run must confirm the final labelled IPA contains both expected core dylibs and compiles the Core B-only iOS 15 MAP_JIT patch.
 
 ## Remaining device validation
 
+- [x] Diagnose the first Core B crash from the iPad .ips report: SIGTRAP at `oaknut::detail::prepare_jit_region()` executing `brk #0xf00d`, before guest code execution.
+- [ ] Build and install the Core B-only MAP_JIT correction; confirm it no longer enters the unserviced StikDebug breakpoint path.
 - [ ] Confirm JIT entitlements and behavior on the target iPad running iOS 15.
 - [ ] Launch a known-compatible game using touchHLE v0.3.0.
 - [ ] Validate touch/controller input, orientation, graphics and audio.
