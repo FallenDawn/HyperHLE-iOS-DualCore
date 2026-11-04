@@ -9,7 +9,7 @@ Dual-core iOS host integration project targeting iOS 15+ and TrollStore, develop
 - **Host:** retain the upstream iOS host (Swift/UIKit/SDL2) wherever possible; add a core-selection layer only after verifying the host's actual lifecycle and ABI.
 - **Build:** Windows for source editing and Git operations; GitHub Actions macOS runner for Xcode/Rust/iOS builds.
 
-This repository currently contains the integration scaffold, source pins, CI entry point, and implementation notes. It does **not** yet contain a completed touchHLE iOS adapter or claim a working dual-core IPA.
+Core A has now been reported as passing a physical-device test on one iPad running iOS 15. Core B is still under development; the source audit and porting decision are documented in [docs/CORE_B_PORT_AUDIT.md](docs/CORE_B_PORT_AUDIT.md). This repository does **not** yet contain a completed touchHLE v0.3.0 iOS adapter or claim a working dual-core IPA.
 
 ## Pinned upstreams
 
