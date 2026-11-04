@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
-"""Make HyperHLE's iOS host UI compile with the Xcode 16 / iOS 18 SDK."""
+"""Patch iOS 26-only glass UI APIs for the Xcode 16 / iOS 18 SDK."""
 from pathlib import Path
-import re
 import sys
 
 if len(sys.argv) != 2:
@@ -10,20 +9,17 @@ if len(sys.argv) != 2:
 path = Path(sys.argv[1])
 text = path.read_text()
 
-# UIButton.Configuration.glass() is unavailable in the iOS 18 SDK.
-button_pattern = re.compile(
-    r"if #available\\(iOS 26\\.0, \\*\\) \\{\\s*"
-    r"configuration = \\.glass\\(\\)\\s*"
-    r"\\} else \\{\\s*configuration = \\.gray\\(\\)\\s*\\}"
-)
-text, button_count = button_pattern.subn("configuration = .gray()", text)
+# Keep the availability branches but replace the unavailable API call itself.
+# This is intentionally whitespace-independent and safe to run repeatedly.
+button_count = text.count("configuration = .glass()")
 if button_count not in (0, 2):
-    raise SystemExit(f"expected 2 iOS 26 glass button blocks or 0 if already patched; found {button_count}")
-if button_count == 0 and ".glass()" in text:
-    raise SystemExit("unrecognized UIButton.Configuration.glass() block; refusing an unsafe partial patch")
+    raise SystemExit(
+        f"expected exactly 2 UIButton.Configuration.glass() calls or 0 if already patched; found {button_count}"
+    )
+text = text.replace("configuration = .glass()", "configuration = .gray()")
 
-# SwiftUI glassEffect is also an iOS 26 API. Keep the existing material-based
-# fallback unconditionally; it preserves the intended appearance on iOS 15+.
+# SwiftUI glassEffect is unavailable before iOS 26. Preserve the existing
+# iOS 15+ material fallback unconditionally.
 extension_start = "private extension View {"
 extension_end = "private struct LibraryBackground: View {"
 if text.count(extension_start) != 1 or text.count(extension_end) != 1:
@@ -31,7 +27,12 @@ if text.count(extension_start) != 1 or text.count(extension_end) != 1:
 start = text.index(extension_start)
 end = text.index(extension_end, start)
 old_extension = text[start:end]
+
 if "glassEffect(" in old_extension:
+    if old_extension.count("glassEffect(") != 2:
+        raise SystemExit(
+            f"expected exactly 2 SwiftUI glassEffect calls in View extension; found {old_extension.count('glassEffect(')}"
+        )
     replacement = """private extension View {
     func touchHLEImportButtonStyle() -> some View {
         background(.ultraThinMaterial, in: Capsule())
@@ -49,10 +50,6 @@ if "glassEffect(" in old_extension:
 }
 
 """
-    if old_extension.count("glassEffect(") != 2:
-        raise SystemExit(
-            f"expected exactly 2 SwiftUI glassEffect calls in View extension; found {old_extension.count('glassEffect(')}"
-        )
     text = text[:start] + replacement + text[end:]
 elif "glassEffect(" in text:
     raise SystemExit("found glassEffect outside the expected View extension; refusing an unsafe patch")
