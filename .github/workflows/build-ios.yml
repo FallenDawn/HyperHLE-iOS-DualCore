@@ -48,6 +48,9 @@ jobs:
       - name: Patch iOS host UI for the selected SDK
         run: python3 scripts/patch-hyperhle-ios-ui.py upstream/HyperHLE-Reborn/platform/ios/Sources/NativeHost.swift
 
+      - name: Set the only secondary core label to official touchHLE v0.3.0
+        run: python3 scripts/patch-hyperhle-core-label.py upstream/HyperHLE-Reborn/platform/ios/Sources/EmulatorCore.swift
+
       - name: Select newest installed Xcode
         shell: bash
         run: |
@@ -187,6 +190,7 @@ jobs:
           sh platform/ios/scripts/package-ipa.sh --trollstore
           sh platform/ios/scripts/verify-ipa.sh dist/HyperHLE-iOS-unsigned.ipa
           sh platform/ios/scripts/verify-ipa.sh --trollstore dist/HyperHLE-iOS-trollstore.ipa
+          sh "${GITHUB_WORKSPACE}/scripts/verify-dualcore-ipa.sh" dist/HyperHLE-iOS-trollstore.ipa
 
       - name: Write build report
         if: always()
