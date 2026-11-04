@@ -27,9 +27,11 @@ jobs:
     name: Build upstream HyperHLE iOS baseline
     needs: verify-upstreams
     runs-on: macos-15
-    timeout-minutes: 90
+    timeout-minutes: 120
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout this integration repository
+        uses: actions/checkout@v4
+
       - name: Checkout HyperHLE-Reborn v1.3.6
         uses: actions/checkout@v4
         with:
@@ -38,42 +40,111 @@ jobs:
           path: upstream/HyperHLE-Reborn
           submodules: recursive
           fetch-depth: 0
-      - name: Install build dependencies
+          fetch-tags: true
+
+      - name: Select newest installed Xcode
+        shell: bash
+        run: |
+          set -euo pipefail
+          xcode="$(find /Applications -maxdepth 1 -name 'Xcode_*.app' -print | sort -V | tail -n 1)"
+          if [ -n "$xcode" ]; then
+            sudo xcode-select -s "$xcode/Contents/Developer"
+          fi
+          echo "DEVELOPER_DIR=$(xcode-select -p)" >> "$GITHUB_ENV"
+          xcodebuild -version
+
+      - name: Install build tools
         run: |
           brew update
-          brew install cmake ninja ldid
+          brew install ninja ldid
+
       - name: Install Rust and iOS target
         uses: dtolnay/rust-toolchain@stable
         with:
           targets: aarch64-apple-ios
+
+      - name: Cache Boost 1.81.0 headers
+        id: cache-boost
+        uses: actions/cache@v4
+        with:
+          path: upstream/HyperHLE-Reborn/vendor/boost
+          key: boost-1.81.0-macos-${{ runner.arch }}
+
+      - name: Download Boost 1.81.0
+        if: steps.cache-boost.outputs.cache-hit != 'true'
+        working-directory: upstream/HyperHLE-Reborn
+        run: |
+          curl --fail --location --retry 3 --retry-delay 2 \
+            --output boost_1_81_0.tar.gz \
+            https://archives.boost.io/release/1.81.0/source/boost_1_81_0.tar.gz
+
+      - name: Extract Boost 1.81.0
+        if: steps.cache-boost.outputs.cache-hit != 'true'
+        working-directory: upstream/HyperHLE-Reborn
+        run: |
+          mkdir -p vendor
+          tar -xzf boost_1_81_0.tar.gz -C vendor
+          mv vendor/boost_1_81_0 vendor/boost
+          test -f vendor/boost/boost/config.hpp
+
+      - name: Set up CMake 3.29
+        uses: lukka/get-cmake@latest
+        with:
+          cmakeVersion: "~3.29.0"
+
       - name: Record toolchain
         run: |
-          xcodebuild -version
           rustc --version
           cargo --version
           cmake --version
           ninja --version
+          python3 --version
+          xcrun --sdk iphoneos --show-sdk-version
+
       - name: Build shared SDL2
         working-directory: upstream/HyperHLE-Reborn
         run: sh platform/ios/scripts/build-sdl-shared.sh iphoneos
+
       - name: Build iOS host and HyperHLE core
         working-directory: upstream/HyperHLE-Reborn
         run: sh platform/ios/scripts/build-host.sh iphoneos Release
-      - name: Package baseline IPA
+
+      - name: Package unsigned baseline IPA
         working-directory: upstream/HyperHLE-Reborn
         run: sh platform/ios/scripts/package-ipa.sh
-      - name: Verify IPA
+
+      - name: Verify unsigned baseline IPA
         working-directory: upstream/HyperHLE-Reborn
-        run: sh platform/ios/scripts/verify-ipa.sh
-      - name: Upload baseline IPA and build outputs
+        run: sh platform/ios/scripts/verify-ipa.sh dist/HyperHLE-iOS-unsigned.ipa
+
+      - name: Write build report
+        if: always()
+        working-directory: upstream/HyperHLE-Reborn
+        shell: bash
+        run: |
+          mkdir -p dist
+          {
+            echo "HyperHLE-Reborn: v1.3.6"
+            echo "Integration repository commit: ${GITHUB_SHA}"
+            echo "Runner: ${RUNNER_OS} / ${RUNNER_ARCH}"
+            xcodebuild -version || true
+            rustc --version || true
+            cargo --version || true
+            if [ -f dist/HyperHLE-iOS-unsigned.ipa ]; then
+              shasum -a 256 dist/HyperHLE-iOS-unsigned.ipa
+            else
+              echo "IPA not produced."
+            fi
+          } > dist/BUILD-REPORT.txt
+
+      - name: Upload baseline IPA and build report
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: HyperHLE-iOS-v1.3.6-baseline
           path: |
             upstream/HyperHLE-Reborn/dist/*.ipa
-            upstream/HyperHLE-Reborn/dist/*.txt
-            upstream/HyperHLE-Reborn/build/**/*.log
+            upstream/HyperHLE-Reborn/dist/BUILD-REPORT.txt
           if-no-files-found: warn
           retention-days: 14
 
@@ -82,7 +153,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/checkout@v4
+      - name: Checkout official touchHLE v0.3.0
+        uses: actions/checkout@v4
         with:
           repository: touchHLE/touchHLE
           ref: v0.3.0
@@ -91,5 +163,7 @@ jobs:
         working-directory: upstream/touchHLE
         run: |
           grep -A2 '^\[lib\]' Cargo.toml
+          grep -q '"cdylib"' Cargo.toml
+          grep -q '"rlib"' Cargo.toml
           git rev-parse HEAD
           echo "Official source audit only: no iOS adapter is implemented yet."
