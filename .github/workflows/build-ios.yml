@@ -159,6 +159,18 @@ jobs:
         run: |
           sh platform/ios/scripts/build-host.sh iphoneos Release
 
+      - name: Verify Core B dylib exports, SDL linkage and iOS minimum
+        shell: bash
+        run: |
+          set -euo pipefail
+          core="upstream/HyperHLE-Reborn/build/rust-ios-native/aarch64-apple-ios/release/libtouchhle_core.dylib"
+          test -f "$core"
+          nm -gU "$core" | grep 'touchhle_ios_run_game'
+          nm -gU "$core" | grep 'touchhle_ios_request_exit'
+          otool -L "$core" | grep 'libSDL2-2.0.0.dylib'
+          vtool -show-build "$core" | grep 'minos 15.0'
+          otool -D "$core" | grep '@rpath/libtouchhle_core.dylib'
+
       - name: Package and verify dual-core TrollStore IPAs
         working-directory: upstream/HyperHLE-Reborn
         run: |
@@ -219,4 +231,4 @@ jobs:
           grep -q '"cdylib"' Cargo.toml
           grep -q '"rlib"' Cargo.toml
           git rev-parse HEAD
-          echo "Official source audit only: no iOS adapter is implemented yet."
+          echo "Official touchHLE v0.3.0 source pin verified; adapter build is exercised in the dual-core job above."
