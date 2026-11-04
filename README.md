@@ -40,13 +40,16 @@ The CI verifies that the dual-core IPA contains libhyperhle_core.dylib and libto
 - integration/touchhle-ios-entry/ — Core B Rust C-ABI adapter
 - integration/touchhle-ios-entry/include/touchhle_core.h — Core B exported C ABI
 - scripts/patch-touchhle-ios.py — applies the iOS patch to official v0.3.0 at build time
+- scripts/patch-touchhle-dynarmic-ios15-jit.py — replaces the StikDebug-only BRK broker path with native MAP_JIT for the iOS 15 target device
 - scripts/patch-hyperhle-core-label.py — labels the picker entry as touchHLE v0.3.0
 - scripts/verify-dualcore-ipa.sh — checks that both intended core dylibs are packaged
 - docs/CORE_B_IMPLEMENTATION.md — adapter, JIT and validation notes
 
-## Important platform/JIT constraints
+## Core B iOS 15 JIT compatibility
 
-The upstream v1.3.6 iOS documentation describes TrollStore/JIT paths for specific iOS versions and device generations. Do not assume every iOS 15+ device has the same JIT behavior. In particular, its permanent-JIT build is documented as unsuitable for A12 and newer devices. Use the standard TrollStore IPA unless the device-specific documentation explicitly supports another mode.
+The target iPad's crash report identified an unserviced Oaknut `brk #0xf00d` trap in `prepare_jit_region()`, before any guest ARM instructions ran. The shared upstream iOS patch uses that StikDebug debugger-broker protocol, which is not serviced by TrollStore's ordinary iOS 15 **Enable JIT** action. Core B therefore gets a separate build-copy-only patch: physical iOS uses `MAP_JIT` and `pthread_jit_write_protect_np`; the upstream HyperHLE/Core A source and its already-validated JIT path remain unchanged. This is a targeted compatibility correction, not yet a proven runtime fix until the rebuilt IPA passes on the iPad.
+
+Use the standard TrollStore IPA and enable JIT before launching games. Do not use the permanent-JIT package mode as a workaround.
 
 ## Legal
 
