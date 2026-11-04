@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax-check integration patch scripts
-        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-hyperhle-build-rust.py
+        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py
 
       - name: Verify upstream refs
         shell: bash
@@ -44,6 +44,9 @@ jobs:
           submodules: recursive
           fetch-depth: 0
           fetch-tags: true
+
+      - name: Patch iOS host UI for the selected SDK
+        run: python3 scripts/patch-hyperhle-ios-ui.py upstream/HyperHLE-Reborn/platform/ios/Sources/NativeHost.swift
 
       - name: Select newest installed Xcode
         shell: bash
