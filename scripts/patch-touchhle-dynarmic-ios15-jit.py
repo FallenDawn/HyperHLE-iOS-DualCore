@@ -21,7 +21,7 @@ text = header.read_text()
 
 def replace_once(old: str, new: str, label: str) -> None:
     global text
-    if new in text:
+    if new and new in text:
         print(f"already patched: {label}")
         return
     count = text.count(old)
