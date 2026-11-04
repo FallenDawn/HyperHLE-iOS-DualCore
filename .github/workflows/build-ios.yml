@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax-check integration patch scripts
-        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py
+        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py
 
       - name: Verify upstream refs
         shell: bash
@@ -161,6 +161,13 @@ jobs:
             upstream/touchHLE/vendor/dynarmic \
             upstream/HyperHLE-Reborn/platform/ios/patches/dynarmic-ios-jit.patch \
             upstream/touchHLE/build/dynarmic-ios-src)"
+          python3 scripts/patch-touchhle-dynarmic-ios15-jit.py "$patched"
+          grep -q "MAP_PRIVATE | MAP_JIT" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
+          grep -q "pthread_jit_write_protect_np(1)" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
+          if grep -q "brk #0xf00d" "$patched/externals/oaknut/include/oaknut/code_block.hpp"; then
+            echo "Core B must not require an unserviced StikDebug BRK trap on iOS 15." >&2
+            exit 1
+          fi
           echo "TOUCHHLE_DYNARMIC_DIR=$GITHUB_WORKSPACE/$patched" >> "$GITHUB_ENV"
 
       - name: Build dual-core iOS host (Core A + Core B)
