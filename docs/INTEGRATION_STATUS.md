@@ -1,37 +1,33 @@
 # Integration status
 
-Last checked: 2026-11-04
+Last checked: 2026-11-05
 
 ## User-confirmed device validation
 
-- [x] Core A (HyperHLE-Reborn v1.3.6) passes on one physical iPad running iOS 15. Exact iPad model, game list, and detailed test checklist are not yet recorded.
+- [x] Core A (HyperHLE-Reborn v1.3.6) passes on one physical iPad running iOS 15.
+- [ ] Core B (official touchHLE v0.3.0) physical-device runtime validation remains pending.
 
-## Verified from upstream source
+## Verified from upstream source and CI
 
-- [x] HyperHLE-Reborn tag `v1.3.6` exists.
-- [x] Its `platform/ios/README.md` documents an Applesauce-derived iOS host, a Rust dynamic core, shared SDL2, and iOS-specific SDL/Dynarmic patches.
-- [x] That README describes a second-core mechanism via `TOUCHHLE_CORE_REPO`, using a touchHLE checkout that has an iOS entry crate (the example is a fork branch, not the official v0.3.0 tag).
-- [x] Official touchHLE tag `v0.3.0` exists.
-- [x] Its Cargo manifest declares `cdylib` and `rlib` library crate types.
-- [x] Official touchHLE v0.3.0 README lists desktop/Android support; iOS is not listed as officially supported.
+- [x] HyperHLE-Reborn tag v1.3.6 exists.
+- [x] Official touchHLE tag v0.3.0 exists and is the only secondary-core source used by CI.
+- [x] Core A builds and packages successfully.
+- [x] Core B iOS adapter compiles against official touchHLE v0.3.0 (Run #33).
+- [x] Core B exports touchhle_ios_run_game and touchhle_ios_request_exit.
+- [x] Core B links against the host's shared SDL2 and declares iOS 15.0 as its minimum deployment target.
+- [x] Dual-core TrollStore IPA packaging completed successfully (Run #33).
+- [x] Host core picker and per-game selection use the installed dylibs; the secondary entry is relabelled touchHLE v0.3.0.
+- [ ] The follow-up CI run must confirm the final labelled IPA contains both expected core dylibs.
 
-## Not yet implemented or verified
+## Remaining device validation
 
-- [x] Core A baseline build completed successfully (user-confirmed).
-- [x] Core A physical-device launch/runtime validation on one iPad running iOS 15 (user-confirmed).
-- [ ] Confirm exact Xcode/macOS runner compatibility and all external build dependencies.
-- [x] Add a dedicated Rust iOS entry crate and C ABI adapter source for official touchHLE v0.3.0.
-- [x] Add a build-time patcher for iOS lifecycle exit, metadata inspection, bundle resources, Documents storage, per-core options and dynamic SDL2.
-- [x] Add a dual-core CI path and Core B dylib export/linkage/minimum-iOS checks.
-- [ ] Confirm the patcher and adapter compile successfully against official touchHLE v0.3.0. See [CORE_B_IMPLEMENTATION.md](CORE_B_IMPLEMENTATION.md).
-- [ ] Prove touchHLE can coexist with the host's SDL2/UIKit ownership model without duplicate SDL runtime/UIApplicationDelegate (CI linkage checks are authored but not yet confirmed).
-- [ ] Implement host-side core picker and per-game core selection.
-- [ ] Validate file import, game launch, touch/controller input, orientation, audio, graphics, app lifecycle and persistence for both cores.
-- [ ] Confirm the HyperHLE iOS JIT patch applies to touchHLE's separately maintained Dynarmic submodule and builds successfully.
-- [ ] Validate JIT entitlements and behavior on the target iPad running iOS 15.
-- [ ] Produce a successful dual-core IPA in CI.
-- [ ] Test Core B and rerun the Core A regression checklist on the target iPad.
+- [ ] Confirm JIT entitlements and behavior on the target iPad running iOS 15.
+- [ ] Launch a known-compatible game using touchHLE v0.3.0.
+- [ ] Validate touch/controller input, orientation, graphics and audio.
+- [ ] Validate suspend/resume, clean exit, repeated launch and switching between cores.
+- [ ] Rerun the Core A regression checklist on the final dual-core IPA.
+- [ ] Record exact iPad model, iOS build and test games.
 
 ## Release gate
 
-A dual-core release must not be labelled complete until the Core B adapter compiles, the host loads and unloads both cores cleanly, and a documented test matrix passes. A successful Core A baseline IPA is not evidence of dual-core support.
+A CI-built IPA is a build candidate, not yet a validated release. Mark the dual-core project complete only after Core B runs on the target iPad and the Core A regression checklist still passes.
