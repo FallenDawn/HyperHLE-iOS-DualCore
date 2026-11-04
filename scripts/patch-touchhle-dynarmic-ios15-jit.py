@@ -21,10 +21,10 @@ text = header.read_text()
 
 def replace_once(old: str, new: str, label: str) -> None:
     global text
-    if new and new in text:
+    count = text.count(old)
+    if count == 0 and (not new or new in text):
         print(f"already patched: {label}")
         return
-    count = text.count(old)
     if count != 1:
         raise SystemExit(f"{label}: expected exactly one anchor, found {count}")
     text = text.replace(old, new, 1)
