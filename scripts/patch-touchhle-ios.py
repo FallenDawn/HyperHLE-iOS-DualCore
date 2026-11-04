@@ -157,6 +157,7 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
         if ptext.count(old_resource_fn) != 1:
             raise SystemExit("paths.rs: original bundled-resource helper not found exactly once")
         ptext = ptext.replace(old_resource_fn, new_resource_fn, 1)
+    ptext = ptext.replace("get_macos_bundled_resources_path()", "get_bundled_resources_path()")
     ptext = ptext.replace("cfg!(not(target_os = \"android\"))", "cfg!(not(any(target_os = \"android\", target_os = \"ios\")))")
     ptext = ptext.replace(
         '    #[cfg(not(target_os = "android"))]\n    {\n        // When touchHLE is run from a .app bundle on macOS,',
