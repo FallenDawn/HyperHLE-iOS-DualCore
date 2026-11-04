@@ -1,0 +1,12 @@
+[package]
+name = "touchhle-ios-entry"
+version = "0.1.0"
+edition = "2021"
+publish = false
+
+[lib]
+name = "touchhle_core"
+crate-type = ["cdylib"]
+
+[dependencies]
+touchHLE = { path = "../../..", default-features = false, features = ["dynamic-sdl"] }
