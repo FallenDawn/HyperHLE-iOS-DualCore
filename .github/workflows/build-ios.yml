@@ -1,4 +1,4 @@
-name: iOS build (HyperHLE baseline)
+name: iOS build (HyperHLE + touchHLE dual-core)
 
 on:
   push:
@@ -24,7 +24,7 @@ jobs:
         run: bash scripts/verify-upstreams.sh
 
   build-hyperhle:
-    name: Build upstream HyperHLE iOS baseline
+    name: Build Core A baseline and dual-core candidate
     needs: verify-upstreams
     runs-on: macos-15
     timeout-minutes: 120
@@ -109,15 +109,50 @@ jobs:
         working-directory: upstream/HyperHLE-Reborn
         run: sh platform/ios/scripts/build-host.sh iphoneos Release
 
-      - name: Package unsigned and TrollStore baseline IPAs
+      - name: Package and verify Core A baseline IPAs
         working-directory: upstream/HyperHLE-Reborn
         run: |
           sh platform/ios/scripts/package-ipa.sh
           sh platform/ios/scripts/package-ipa.sh --trollstore
+          sh platform/ios/scripts/verify-ipa.sh dist/HyperHLE-iOS-unsigned.ipa
+          sh platform/ios/scripts/verify-ipa.sh --trollstore dist/HyperHLE-iOS-trollstore.ipa
+          mkdir -p dist/core-a-baseline
+          cp dist/HyperHLE-iOS-unsigned.ipa dist/core-a-baseline/
+          cp dist/HyperHLE-iOS-trollstore.ipa dist/core-a-baseline/
 
-      - name: Verify baseline IPAs
+      - name: Checkout official touchHLE v0.3.0
+        uses: actions/checkout@v4
+        with:
+          repository: touchHLE/touchHLE
+          ref: v0.3.0
+          path: upstream/touchHLE
+          submodules: recursive
+          fetch-depth: 0
+
+      - name: Install the Core B iOS entry crate and apply audited iOS patch
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p upstream/touchHLE/platform/ios/rust-entry/src
+          cp integration/touchhle-ios-entry/Cargo.toml upstream/touchHLE/platform/ios/rust-entry/Cargo.toml
+          cp integration/touchhle-ios-entry/src/lib.rs upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
+          python3 scripts/patch-touchhle-ios.py
+          grep -q 'dynamic-sdl = ' upstream/touchHLE/Cargo.toml
+          grep -q 'pub fn request_host_exit' upstream/touchHLE/src/lib.rs
+          grep -q 'touchhle_ios_run_game' upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
+
+      - name: Build dual-core iOS host (Core A + Core B)
+        working-directory: upstream/HyperHLE-Reborn
+        env:
+          TOUCHHLE_CORE_REPO: ${{ github.workspace }}/upstream/touchHLE
+        run: |
+          sh platform/ios/scripts/build-host.sh iphoneos Release
+
+      - name: Package and verify dual-core TrollStore IPAs
         working-directory: upstream/HyperHLE-Reborn
         run: |
+          sh platform/ios/scripts/package-ipa.sh
+          sh platform/ios/scripts/package-ipa.sh --trollstore
           sh platform/ios/scripts/verify-ipa.sh dist/HyperHLE-iOS-unsigned.ipa
           sh platform/ios/scripts/verify-ipa.sh --trollstore dist/HyperHLE-iOS-trollstore.ipa
 
@@ -143,13 +178,14 @@ jobs:
             done
           } > dist/BUILD-REPORT.txt
 
-      - name: Upload baseline IPA and build report
+      - name: Upload Core A baseline, dual-core candidate and build report
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: HyperHLE-iOS-v1.3.6-baseline
+          name: HyperHLE-iOS-v1.3.6-dualcore-candidate
           path: |
             upstream/HyperHLE-Reborn/dist/*.ipa
+            upstream/HyperHLE-Reborn/dist/core-a-baseline/*.ipa
             upstream/HyperHLE-Reborn/dist/BUILD-REPORT.txt
           if-no-files-found: warn
           retention-days: 14
