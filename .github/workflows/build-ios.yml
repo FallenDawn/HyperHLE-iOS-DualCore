@@ -109,13 +109,17 @@ jobs:
         working-directory: upstream/HyperHLE-Reborn
         run: sh platform/ios/scripts/build-host.sh iphoneos Release
 
-      - name: Package unsigned baseline IPA
+      - name: Package unsigned and TrollStore baseline IPAs
         working-directory: upstream/HyperHLE-Reborn
-        run: sh platform/ios/scripts/package-ipa.sh
+        run: |
+          sh platform/ios/scripts/package-ipa.sh
+          sh platform/ios/scripts/package-ipa.sh --trollstore
 
-      - name: Verify unsigned baseline IPA
+      - name: Verify baseline IPAs
         working-directory: upstream/HyperHLE-Reborn
-        run: sh platform/ios/scripts/verify-ipa.sh dist/HyperHLE-iOS-unsigned.ipa
+        run: |
+          sh platform/ios/scripts/verify-ipa.sh dist/HyperHLE-iOS-unsigned.ipa
+          sh platform/ios/scripts/verify-ipa.sh --trollstore dist/HyperHLE-iOS-trollstore.ipa
 
       - name: Write build report
         if: always()
@@ -130,11 +134,13 @@ jobs:
             xcodebuild -version || true
             rustc --version || true
             cargo --version || true
-            if [ -f dist/HyperHLE-iOS-unsigned.ipa ]; then
-              shasum -a 256 dist/HyperHLE-iOS-unsigned.ipa
-            else
-              echo "IPA not produced."
-            fi
+            for ipa in dist/HyperHLE-iOS-unsigned.ipa dist/HyperHLE-iOS-trollstore.ipa; do
+              if [ -f "$ipa" ]; then
+                shasum -a 256 "$ipa"
+              else
+                echo "IPA not produced: $ipa"
+              fi
+            done
           } > dist/BUILD-REPORT.txt
 
       - name: Upload baseline IPA and build report
