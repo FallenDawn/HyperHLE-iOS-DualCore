@@ -113,7 +113,7 @@ old_alloc = """#    if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 new_alloc = """#    if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
         // iOS 15-25: TrollStore's Enable JIT attaches a debugger and grants
         // CS_DEBUGGED. MAP_JIT plus the per-thread write-protect API is the
-        // native path; do not issue the StikDebug-only brk #0xf00d protocol.
+        // native path; do not issue the StikDebug-only debugger-breakpoint protocol.
         m_memory = (std::uint32_t*)mmap(nullptr, size,
                                         PROT_READ | PROT_WRITE | PROT_EXEC,
                                         MAP_ANON | MAP_PRIVATE | MAP_JIT, -1, 0);
