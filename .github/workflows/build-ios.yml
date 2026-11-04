@@ -19,6 +19,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+      - name: Syntax-check integration patch scripts
+        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-hyperhle-build-rust.py
+
       - name: Verify upstream refs
         shell: bash
         run: bash scripts/verify-upstreams.sh
