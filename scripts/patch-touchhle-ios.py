@@ -123,9 +123,22 @@ pub fn default_options_file() -> String {
 }
 '''
         ptext = ptext.replace(anchor, anchor + addition, 1)
-    if "fn get_bundled_resources_path()" not in ptext:
-        anchor = "/// Abstraction over a platform-specific type for accessing a resource bundled\n"
-        addition = '''/// Return the resources directory inside an Apple application bundle.
+    old_resource_fn = """/// macOS-only: If touchHLE is located in a .app bundle, return the path of the
+/// Resources directory. If touchHLE is not located in a .app bundle, return
+/// [None].
+#[allow(dead_code)]
+fn get_macos_bundled_resources_path() -> Option<PathBuf> {
+    if std::env::consts::OS != "macos" {
+        return None;
+    }
+    let base_path = PathBuf::from(sdl2::filesystem::base_path().ok()?);
+    if base_path.file_name().is_some_and(|p| p == "Resources") {
+        Some(base_path)
+    } else {
+        None
+    }
+}"""
+    new_resource_fn = """/// On Apple hosts, return the resources directory inside the application bundle.
 #[allow(dead_code)]
 fn get_bundled_resources_path() -> Option<PathBuf> {
     if !matches!(std::env::consts::OS, "ios" | "macos") {
@@ -139,13 +152,11 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
     } else {
         None
     }
-}
-
-'''
-        if ptext.count(anchor) != 1:
-            raise SystemExit("paths.rs: ResourceFile anchor not found")
-        ptext = ptext.replace(anchor, addition + anchor, 1)
-    ptext = ptext.replace("get_macos_bundled_resources_path()", "get_bundled_resources_path()")
+}"""
+    if new_resource_fn not in ptext:
+        if ptext.count(old_resource_fn) != 1:
+            raise SystemExit("paths.rs: original bundled-resource helper not found exactly once")
+        ptext = ptext.replace(old_resource_fn, new_resource_fn, 1)
     ptext = ptext.replace("cfg!(not(target_os = \"android\"))", "cfg!(not(any(target_os = \"android\", target_os = \"ios\")))")
     ptext = ptext.replace(
         '    #[cfg(not(target_os = "android"))]\n    {\n        // When touchHLE is run from a .app bundle on macOS,',
@@ -165,6 +176,13 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
         "    let default_options_path = paths::DEFAULT_OPTIONS_FILE;",
         "    let default_options_path = paths::default_options_file();",
         "core-specific default options selection",
+    )
+
+    replace_once(
+        "src/lib.rs",
+        "    match paths::ResourceFile::open(default_options_path) {",
+        "    match paths::ResourceFile::open(&default_options_path) {",
+        "borrow core-specific default options path",
     )
 
 if __name__ == "__main__":
