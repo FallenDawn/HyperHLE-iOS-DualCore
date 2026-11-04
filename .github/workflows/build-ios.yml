@@ -1,0 +1,95 @@
+name: iOS build (HyperHLE baseline)
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ios-build-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify-upstreams:
+    name: Verify pinned upstream tags
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Verify upstream refs
+        shell: bash
+        run: bash scripts/verify-upstreams.sh
+
+  build-hyperhle:
+    name: Build upstream HyperHLE iOS baseline
+    needs: verify-upstreams
+    runs-on: macos-15
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+      - name: Checkout HyperHLE-Reborn v1.3.6
+        uses: actions/checkout@v4
+        with:
+          repository: KlugKlugTG/HyperHLE-Reborn
+          ref: v1.3.6
+          path: upstream/HyperHLE-Reborn
+          submodules: recursive
+          fetch-depth: 0
+      - name: Install build dependencies
+        run: |
+          brew update
+          brew install cmake ninja ldid
+      - name: Install Rust and iOS target
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: aarch64-apple-ios
+      - name: Record toolchain
+        run: |
+          xcodebuild -version
+          rustc --version
+          cargo --version
+          cmake --version
+          ninja --version
+      - name: Build shared SDL2
+        working-directory: upstream/HyperHLE-Reborn
+        run: sh platform/ios/scripts/build-sdl-shared.sh iphoneos
+      - name: Build iOS host and HyperHLE core
+        working-directory: upstream/HyperHLE-Reborn
+        run: sh platform/ios/scripts/build-host.sh iphoneos Release
+      - name: Package baseline IPA
+        working-directory: upstream/HyperHLE-Reborn
+        run: sh platform/ios/scripts/package-ipa.sh
+      - name: Verify IPA
+        working-directory: upstream/HyperHLE-Reborn
+        run: sh platform/ios/scripts/verify-ipa.sh
+      - name: Upload baseline IPA and build outputs
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: HyperHLE-iOS-v1.3.6-baseline
+          path: |
+            upstream/HyperHLE-Reborn/dist/*.ipa
+            upstream/HyperHLE-Reborn/dist/*.txt
+            upstream/HyperHLE-Reborn/build/**/*.log
+          if-no-files-found: warn
+          retention-days: 14
+
+  touchhle-source-audit:
+    name: Audit official touchHLE v0.3.0 source
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/checkout@v4
+        with:
+          repository: touchHLE/touchHLE
+          ref: v0.3.0
+          path: upstream/touchHLE
+      - name: Confirm Rust library crate types and record source revision
+        working-directory: upstream/touchHLE
+        run: |
+          grep -A2 '^\[lib\]' Cargo.toml
+          git rev-parse HEAD
+          echo "Official source audit only: no iOS adapter is implemented yet."
