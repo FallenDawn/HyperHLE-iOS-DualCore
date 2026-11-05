@@ -175,3 +175,49 @@ else:
     present_source = present_source.replace(present_anchor, present_replacement, 1)
     present_path.write_text(present_source)
     print("patched: deterministic present_frame state")
+
+
+# OpenGL ES 1.1 requires non-power-of-two textures to use CLAMP_TO_EDGE
+# wrapping (and non-mipmap minification filters). The compositor framebuffer
+# is sized to the iPhone screen (320x480 on the tested iPad host), so it is
+# NPOT. Leaving the default REPEAT wrap makes this texture incomplete on
+# implementations without unrestricted NPOT support and sampling it can
+# produce a black final presentation even while the source EAGL buffer is
+# populated. Apply the required NPOT-safe parameters to the compositor FBO
+# texture immediately after allocation and also when reusing it.
+npot_anchor = """            gles.TexParameteri(
+                gles11::TEXTURE_2D,
+                gles11::TEXTURE_MAG_FILTER,
+                gles11::LINEAR as _,
+            );
+
+            gles.GenFramebuffersOES(1, &mut framebuffer);"""
+npot_replacement = """            gles.TexParameteri(
+                gles11::TEXTURE_2D,
+                gles11::TEXTURE_MAG_FILTER,
+                gles11::LINEAR as _,
+            );
+            gles.TexParameteri(
+                gles11::TEXTURE_2D,
+                gles11::TEXTURE_WRAP_S,
+                gles11::CLAMP_TO_EDGE as _,
+            );
+            gles.TexParameteri(
+                gles11::TEXTURE_2D,
+                gles11::TEXTURE_WRAP_T,
+                gles11::CLAMP_TO_EDGE as _,
+            );
+
+            gles.GenFramebuffersOES(1, &mut framebuffer);"""
+if npot_replacement in source:
+    print("already patched: NPOT-safe compositor framebuffer texture")
+else:
+    count = source.count(npot_anchor)
+    if count != 1:
+        raise SystemExit(f"NPOT-safe compositor framebuffer texture: expected one source anchor, found {count}")
+    source = source.replace(npot_anchor, npot_replacement, 1)
+    print("patched: NPOT-safe compositor framebuffer texture")
+
+# Existing framebuffer textures survive between frames. Explicitly bind the
+# texture before each composition pass so later layer uploads cannot leave a
+# different texture bound when the FBO is reused.
