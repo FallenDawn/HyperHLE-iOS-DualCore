@@ -13,7 +13,7 @@ The old touchHLE 0.2.3 picker label is replaced at build time with **touchHLE v0
 
 - integration/touchhle-ios-entry/: Cargo entry crate producing libtouchhle_core.dylib.
 - scripts/patch-touchhle-ios.py: applies the iOS-only changes to a clean official v0.3.0 checkout.
-- scripts/patch-touchhle-dynarmic-ios15-jit.py: patches only the isolated Core B Dynarmic build copy to use the iOS 15 MAP_JIT API instead of requiring a StikDebug breakpoint broker.
+- scripts/patch-touchhle-dynarmic-ios15-jit.py: patches only the isolated Core B Dynarmic build copy to use a debugger-backed RWX mapping with `mprotect()` RW/RX transitions, avoiding the StikDebug BRK broker and macOS-only pthread JIT API.
 - integration/touchhle-ios-entry/include/touchhle_core.h: C declarations for adapter exports.
 - .github/workflows/build-ios.yml: builds Core A, then official Core B, verifies the dylib and packages a dual-core IPA.
 
@@ -23,7 +23,7 @@ The patch adds:
 3. A cooperative exit check in the emulator execution loop.
 4. iOS bundle resource lookup, a Documents-based writable data directory and a per-core default-options filename.
 5. A Dynarmic source-directory override so the iOS JIT-patched source can be compiled.
-6. For Core B only, an iOS 15 JIT allocator using `mmap(MAP_JIT)` and `pthread_jit_write_protect_np(0/1)`. This avoids the unserviced `brk #0xf00d` request in the shared upstream patch. The patch is applied after the common Dynarmic patch to the copied `upstream/touchHLE/build/dynarmic-ios-src` tree; it does not modify HyperHLE's source or Core A build.
+6. For Core B only, an iOS 15 JIT allocator using an anonymous RWX mapping and `mprotect()` transitions between RW and RX. This avoids the unserviced `brk #0xf00d` request and does not call `pthread_jit_write_protect_np`, which Xcode marks unavailable on iOS. The patch is applied after the common Dynarmic patch to the copied `upstream/touchHLE/build/dynarmic-ios-src` tree; it does not modify HyperHLE's source or Core A build.
 
 ## CI verification
 
@@ -45,7 +45,7 @@ The C declarations are in integration/touchhle-ios-entry/include/touchhle_core.h
 
 CI build success is not a substitute for testing on the target iPad. The following remain unverified:
 
-- Rebuild with the Core B-only MAP_JIT correction and confirm the JIT allocator compiles for the iOS device target.
+- Rebuild with the Core B-only debugger-backed `mprotect()` correction and confirm the JIT allocator compiles for the iOS device target.
 - Confirm Core B JIT availability and actual game launch on iOS 15 after installing the rebuilt IPA and enabling TrollStore JIT.
 - Game touch/controller input, graphics and audio.
 - Orientation, suspend/resume and clean return to the library.
