@@ -70,8 +70,7 @@ jobs:
 
       - name: Install build tools
         run: |
-          brew update
-          brew install ninja ldid
+          HOMEBREW_NO_AUTO_UPDATE=1 brew install ninja ldid
 
       - name: Install Rust and iOS target
         uses: dtolnay/rust-toolchain@stable
