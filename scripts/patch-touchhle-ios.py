@@ -256,6 +256,7 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
 
     # Inspect guest PCM before and after the AudioUnit render callback.
     replace_once(
+        "src/frameworks/audio_toolbox/audio_unit.rs",
         """    // Run render callback
     let AURenderCallbackStruct {
         input_proc: inputProc,
