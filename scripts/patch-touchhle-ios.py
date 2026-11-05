@@ -113,6 +113,26 @@ fn take_host_exit_request() -> bool {
         "cooperative return to iOS host",
     )
 
+    # Emit the actual Info.plist device-family decision and SDL drawable metrics.
+    replace_once(
+        "src/environment.rs",
+        "        let device_family_array = bundle.device_family_array();",
+        "        let device_family_array = bundle.device_family_array();\n        #[cfg(target_os = \"ios\")]\n        log!(\"iOS diagnostic: bundle path={:?}, parsed UIDeviceFamily={:?}\", bundle.bundle_path(), device_family_array);",
+        "iOS bundle UIDeviceFamily diagnostic",
+    )
+    replace_once(
+        "src/window.rs",
+        "        if let Some(icon) = icon {",
+        "        #[cfg(target_os = \"ios\")]\n        log!(\"iOS diagnostic: SDL window size={:?}, drawable size={:?}, family={:?}, orientation={:?}\", window.size(), window.drawable_size(), device_family, device_orientation);\n\n        if let Some(icon) = icon {",
+        "iOS SDL window and drawable diagnostic",
+    )
+    replace_once(
+        "src/window.rs",
+        "    pub fn swap_window(&self) {\n        self.window.gl_swap_window();\n    }",
+        "    pub fn swap_window(&self) {\n        #[cfg(target_os = \"ios\")]\n        {\n            static FIRST_PRESENT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(true);\n            if FIRST_PRESENT.swap(false, std::sync::atomic::Ordering::Relaxed) {\n                log!(\"iOS diagnostic: first GL present; window={:?}, drawable={:?}, viewport={:?}\", self.window.size(), self.window.drawable_size(), self.viewport());\n            }\n        }\n        self.window.gl_swap_window();\n    }",
+        "iOS first OpenGL present diagnostic",
+    )
+
     paths = CORE / "src/paths.rs"
     ptext = paths.read_text()
     if "pub fn default_options_file()" not in ptext:
