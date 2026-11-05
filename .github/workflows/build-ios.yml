@@ -27,7 +27,7 @@ jobs:
   build-touchhle-only:
     name: Build iOS host with Core B only (touchHLE v0.3.0)
     needs: verify-upstreams
-    runs-on: macos-14
+    runs-on: macos-15
     timeout-minutes: 120
     steps:
       - name: Checkout integration repository
