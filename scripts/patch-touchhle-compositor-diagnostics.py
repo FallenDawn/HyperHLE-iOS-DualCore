@@ -221,3 +221,8 @@ else:
 # Existing framebuffer textures survive between frames. Explicitly bind the
 # texture before each composition pass so later layer uploads cannot leave a
 # different texture bound when the FBO is reused.
+
+
+# Persist the NPOT fix added above; the earlier write_text() belongs to the
+# diagnostics patch section and runs before this additional source rewrite.
+path.write_text(source)
