@@ -195,8 +195,18 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
         '    if std::env::consts::OS != "android" && std::env::consts::OS != "macos" && std::env::consts::OS != "ios" {',
         1
     )
+    # Do not let a pre-existing Documents/touchHLE_options.txt from an
+    # earlier dual-core test override the official v0.3.0 defaults bundled
+    # inside this installer. Keep an independent optional override file.
+    old_user_options = 'pub const USER_OPTIONS_FILE: &str = "touchHLE_options.txt";'
+    new_user_options = 'pub const USER_OPTIONS_FILE: &str = "touchHLE_options_coreb.txt";'
+    if new_user_options not in ptext:
+        if ptext.count(old_user_options) != 1:
+            raise SystemExit("paths.rs: USER_OPTIONS_FILE anchor not found exactly once")
+        ptext = ptext.replace(old_user_options, new_user_options, 1)
+
     paths.write_text(ptext)
-    print("patched: iOS bundle resources, Documents data path and core-specific options")
+    print("patched: iOS bundle resources, Documents data path, isolated Core B overrides and core-specific options")
 
     replace_once(
         "src/lib.rs",
