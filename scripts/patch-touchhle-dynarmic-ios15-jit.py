@@ -1,11 +1,10 @@
 #!/usr/bin/env python3
-"""Use the native MAP_JIT path for the iOS 15 Core B build.
+"""Patch only touchHLE Core B's Dynarmic JIT allocator for iOS 15.
 
-The shared upstream patch uses the StikDebug brk #0xf00d broker protocol for
-physical iOS devices. That protocol requires a debugger script to service the
-trap; TrollStore's ordinary Enable JIT action on iOS 15 does not service it.
-For this project's iOS 15 target, use MAP_JIT plus pthread_jit_write_protect_np
-instead. This script only patches the isolated touchHLE Dynarmic build copy.
+The common HyperHLE patch installs a StikDebug BRK broker on physical iOS.
+Core B on this iOS 15 target instead uses the traditional debugger-backed
+RWX mapping and mprotect W^X transitions. macOS-only pthread JIT APIs and
+MAP_JIT are deliberately not used on physical iOS.
 """
 from pathlib import Path
 import sys
@@ -19,6 +18,7 @@ if not header.is_file():
     raise SystemExit(f"Oaknut CodeBlock header not found: {header}")
 text = header.read_text()
 
+
 def replace_once(old: str, new: str, label: str) -> None:
     global text
     count = text.count(old)
@@ -29,6 +29,7 @@ def replace_once(old: str, new: str, label: str) -> None:
         raise SystemExit(f"{label}: expected exactly one anchor, found {count}")
     text = text.replace(old, new, 1)
     print(f"patched: {label}")
+
 
 broker_helpers = """#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 namespace detail {
@@ -66,7 +67,7 @@ __attribute__((noinline, optnone, naked)) static void detach_jit_server()
 #endif
 
 """
-replace_once(broker_helpers, "", "remove StikDebug-only BRK broker helpers")
+replace_once(broker_helpers, "", "remove StikDebug BRK broker helpers")
 
 old_alloc = """#    if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
         auto& reusable_region = detail::reusable_jit_region();
@@ -111,15 +112,14 @@ old_alloc = """#    if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
 #    elif TARGET_OS_IPHONE
 """
 new_alloc = """#    if TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-        // iOS 15-25: TrollStore's Enable JIT attaches a debugger and grants
-        // CS_DEBUGGED. MAP_JIT plus the per-thread write-protect API is the
-        // native path; do not issue the StikDebug-only debugger-breakpoint protocol.
+        // iOS 15 debugger-backed JIT: one anonymous RWX mapping, with W^X
+        // enforced by mprotect() in protect() and unprotect().
         m_memory = (std::uint32_t*)mmap(nullptr, size,
                                         PROT_READ | PROT_WRITE | PROT_EXEC,
-                                        MAP_ANON | MAP_PRIVATE | MAP_JIT, -1, 0);
+                                        MAP_ANON | MAP_PRIVATE, -1, 0);
 #    elif TARGET_OS_IPHONE
 """
-replace_once(old_alloc, new_alloc, "use MAP_JIT allocation on physical iOS")
+replace_once(old_alloc, new_alloc, "use debugger-backed RWX mapping on physical iOS")
 
 old_check = """#if defined(_WIN32)
         if (m_memory == nullptr)
@@ -140,12 +140,8 @@ new_check = """#if defined(_WIN32)
         if (m_memory == MAP_FAILED)
 #endif
             throw std::bad_alloc{};
-
-        // iOS 15 uses one MAP_JIT mapping; the thread-local JIT write
-        // protection API switches this mapping between writable and executable.
-        m_wmemory = m_memory;
 """
-replace_once(old_check, new_check, "correct MAP_FAILED check and unified mapping")
+replace_once(old_check, new_check, "use MAP_FAILED allocation check")
 
 old_dtor = """#    if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
         auto& reusable_region = detail::reusable_jit_region();
@@ -157,7 +153,7 @@ old_dtor = """#    if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMUL
 #    endif
         munmap(m_memory, m_size);
 """
-replace_once(old_dtor, "        munmap(m_memory, m_size);\n", "remove broker alias teardown")
+replace_once(old_dtor, "        munmap(m_memory, m_size);\\n", "remove broker alias teardown")
 
 replace_once("""#if defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(1);
@@ -165,9 +161,9 @@ replace_once("""#if defined(__APPLE__) && !TARGET_OS_IPHONE
 """, """#if defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(1);
 #elif defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-        pthread_jit_write_protect_np(1);
+        mprotect(m_memory, m_size, PROT_READ | PROT_EXEC);
 #elif defined(__APPLE__) && TARGET_OS_IPHONE && TARGET_OS_SIMULATOR
-""", "enable JIT write protection on physical iOS")
+""", "protect physical iOS JIT mapping with mprotect")
 
 replace_once("""#if defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(0);
@@ -175,9 +171,9 @@ replace_once("""#if defined(__APPLE__) && !TARGET_OS_IPHONE
 """, """#if defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(0);
 #elif defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
-        pthread_jit_write_protect_np(0);
+        mprotect(m_memory, m_size, PROT_READ | PROT_WRITE);
 #elif defined(__APPLE__) && TARGET_OS_IPHONE && TARGET_OS_SIMULATOR
-""", "disable JIT write protection on physical iOS")
+""", "unprotect physical iOS JIT mapping with mprotect")
 
 replace_once("""    void detach_jit_server()
     {
@@ -188,21 +184,25 @@ replace_once("""    void detach_jit_server()
         }
 #endif
     }
-""", """    // No external JIT broker is used by the iOS 15 MAP_JIT path.
+""", """    // The traditional iOS 15 debugger JIT does not use a JIT broker.
     void detach_jit_server() {}
-""", "make JIT broker detach a no-op")
+""", "remove JIT broker detach")
 
 replace_once("""#if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMULATOR
     bool m_should_detach_jit_server = false;
 #endif
-""", "", "remove broker state")
+""", "", "remove JIT broker state")
 
 if "brk #0xf00d" in text or "prepare_jit_region" in text or "detail::detach_jit_server" in text:
-    raise SystemExit("StikDebug BRK broker code remains in the Core B Dynarmic copy")
-if "MAP_PRIVATE | MAP_JIT" not in text:
-    raise SystemExit("MAP_JIT allocation was not installed")
-if "pthread_jit_write_protect_np(1)" not in text or "pthread_jit_write_protect_np(0)" not in text:
-    raise SystemExit("JIT write-protection toggles are incomplete")
+    raise SystemExit("StikDebug BRK broker code remains in Core B Dynarmic")
+if "PROT_READ | PROT_WRITE | PROT_EXEC" not in text:
+    raise SystemExit("RWX allocation was not installed")
+if "mprotect(m_memory, m_size, PROT_READ | PROT_EXEC)" not in text:
+    raise SystemExit("RX protection transition is missing")
+if "mprotect(m_memory, m_size, PROT_READ | PROT_WRITE)" not in text:
+    raise SystemExit("RW protection transition is missing")
+if "pthread_jit_write_protect_np" in text:
+    raise SystemExit("pthread_jit_write_protect_np must not be used for physical iOS")
 
 header.write_text(text)
-print(f"Core B iOS 15 MAP_JIT patch verified: {header}")
+print(f"Core B iOS 15 debugger-backed JIT patch verified: {header}")
