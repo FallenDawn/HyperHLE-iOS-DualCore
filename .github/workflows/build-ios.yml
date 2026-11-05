@@ -130,6 +130,7 @@ jobs:
           python3 scripts/patch-touchhle-eagl-diagnostics.py
           grep -q 'dynamic-sdl = ' upstream/touchHLE/Cargo.toml
           grep -q 'touchhle_ios_run_game' upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
+          grep -q 'USER_OPTIONS_FILE: &str = "touchHLE_options_coreb.txt"' upstream/touchHLE/src/paths.rs
           grep -q 'iOS EAGL diagnostic: present' upstream/touchHLE/src/frameworks/opengles/eagl.rs
 
       - name: Prepare Core B iOS 15 JIT source
