@@ -40,14 +40,14 @@ The CI verifies that the dual-core IPA contains libhyperhle_core.dylib and libto
 - integration/touchhle-ios-entry/ — Core B Rust C-ABI adapter
 - integration/touchhle-ios-entry/include/touchhle_core.h — Core B exported C ABI
 - scripts/patch-touchhle-ios.py — applies the iOS patch to official v0.3.0 at build time
-- scripts/patch-touchhle-dynarmic-ios15-jit.py — replaces the StikDebug-only BRK broker path with native MAP_JIT for the iOS 15 target device
+- scripts/patch-touchhle-dynarmic-ios15-jit.py — replaces the StikDebug-only BRK broker path with debugger-backed RWX allocation and mprotect W^X transitions for iOS 15
 - scripts/patch-hyperhle-core-label.py — labels the picker entry as touchHLE v0.3.0
 - scripts/verify-dualcore-ipa.sh — checks that both intended core dylibs are packaged
 - docs/CORE_B_IMPLEMENTATION.md — adapter, JIT and validation notes
 
 ## Core B iOS 15 JIT compatibility
 
-The target iPad's crash report identified an unserviced Oaknut `brk #0xf00d` trap in `prepare_jit_region()`, before any guest ARM instructions ran. The shared upstream iOS patch uses that StikDebug debugger-broker protocol, which is not serviced by TrollStore's ordinary iOS 15 **Enable JIT** action. Core B therefore gets a separate build-copy-only patch: physical iOS uses `MAP_JIT` and `pthread_jit_write_protect_np`; the upstream HyperHLE/Core A source and its already-validated JIT path remain unchanged. This is a targeted compatibility correction, not yet a proven runtime fix until the rebuilt IPA passes on the iPad.
+The target iPad's crash report identified an unserviced Oaknut `brk #0xf00d` trap in `prepare_jit_region()`, before any guest ARM instructions ran. The shared upstream iOS patch uses a StikDebug debugger-broker protocol. For the iOS 15 target, Core B now gets a separate build-copy-only patch: physical iOS uses a debugger-backed anonymous RWX mapping and switches it between RW and RX with `mprotect()`. This removes both the BRK broker dependency and the macOS-only `pthread_jit_write_protect_np` API. HyperHLE/Core A source and its existing JIT path remain unchanged. This is still awaiting a successful rebuild and real-device validation.
 
 Use the standard TrollStore IPA and enable JIT before launching games. Do not use the permanent-JIT package mode as a workaround.
 
