@@ -207,8 +207,10 @@ if "mprotect(m_memory, m_size, PROT_READ | PROT_WRITE)" not in text:
     raise SystemExit("RW protection transition is missing")
 if "m_wmemory = m_memory;" not in text:
     raise SystemExit("single-map writable alias is not initialized")
-if "pthread_jit_write_protect_np" in text:
-    raise SystemExit("pthread_jit_write_protect_np must not be used for physical iOS")
+# pthread_jit_write_protect_np remains in macOS/simulator branches. Only
+# the physical-device iOS branches must use mprotect instead.
+if "brk #0xf00d" in text:
+    raise SystemExit("StikDebug BRK broker code remains in Core B Dynarmic")
 
 header.write_text(text)
 print(f"Core B iOS 15 debugger-backed JIT patch verified: {header}")
