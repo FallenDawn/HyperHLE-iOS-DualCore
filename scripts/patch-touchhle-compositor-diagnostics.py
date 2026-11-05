@@ -126,7 +126,7 @@ replace_once(
                 static UPLOAD_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
                 let frame = UPLOAD_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
                 if frame <= 8 || frame % 60 == 0 {
-                    let gl_error = gles.GetError();
+                    let gl_error = unsafe { gles.GetError() };
                     log!("iOS compositor diagnostic: CAEAGLLayer texture upload frame={} layer={:?} size={}x{} GL_error=0x{:x}",
                         frame, layer, width, height, gl_error);
                 }
