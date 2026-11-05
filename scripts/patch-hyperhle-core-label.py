@@ -21,6 +21,7 @@ def replace_one(old: str, new: str) -> None:
 
 replace_one('case .touchHLE: return "touchHLE"', 'case .touchHLE: return "touchHLE v0.3.0"')
 replace_one('case .touchHLE: return "0.2.3"', 'case .touchHLE: return "v0.3.0"')
+replace_one('case .touchHLE: return "touchHLE_default_options.touchhle.txt"', 'case .touchHLE: return "touchHLE_default_options.txt"')
 
 if 'case .touchHLE: return "0.2.3"' in source:
     raise SystemExit("legacy touchHLE 0.2.3 label remains")
