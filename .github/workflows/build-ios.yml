@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax-check integration scripts
-        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-touchhle-eagl-diagnostics.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py
+        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-touchhle-eagl-diagnostics.py scripts/patch-touchhle-compositor-diagnostics.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py
       - name: Verify upstream refs
         run: bash scripts/verify-upstreams.sh
 
@@ -128,10 +128,12 @@ jobs:
           cp integration/touchhle-ios-entry/src/lib.rs upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
           python3 scripts/patch-touchhle-ios.py
           python3 scripts/patch-touchhle-eagl-diagnostics.py
+          python3 scripts/patch-touchhle-compositor-diagnostics.py
           grep -q 'dynamic-sdl = ' upstream/touchHLE/Cargo.toml
           grep -q 'touchhle_ios_run_game' upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
           grep -q 'USER_OPTIONS_FILE: &str = "touchHLE_options_coreb.txt"' upstream/touchHLE/src/paths.rs
           grep -q 'iOS EAGL diagnostic: present' upstream/touchHLE/src/frameworks/opengles/eagl.rs
+          grep -q 'iOS compositor diagnostic: SDL window swap completed' upstream/touchHLE/src/frameworks/core_animation/composition.rs
 
       - name: Prepare Core B iOS 15 JIT source
         shell: bash
