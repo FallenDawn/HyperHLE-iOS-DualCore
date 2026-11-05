@@ -254,6 +254,69 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
         "OpenAL iOS context diagnostics",
     )
 
+    # Inspect guest PCM before and after the AudioUnit render callback.
+    replace_once(
+        """    // Run render callback
+    let AURenderCallbackStruct {
+        input_proc: inputProc,
+        input_proc_ref_con: inputProcRefCon,
+    } = audio_unit_host_object.render_callback.unwrap();
+    let () = inputProc.call_from_host(
+        env,
+        (
+            inputProcRefCon,
+            action_flags,
+            nil.cast_void().cast_const(),
+            0u32,
+            number_frames,
+            audio_buffer_list,
+        ),
+    );
+
+    let at_state = &mut env.framework_state.audio_toolbox;""",
+        """    // Run render callback
+    let AURenderCallbackStruct {
+        input_proc: inputProc,
+        input_proc_ref_con: inputProcRefCon,
+    } = audio_unit_host_object.render_callback.unwrap();
+    #[cfg(target_os = "ios")]
+    let callback_frame = {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static CALLBACK_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
+        CALLBACK_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1
+    };
+    #[cfg(target_os = "ios")]
+    if callback_frame <= 10 || callback_frame % 120 == 0 {
+        let bytes = env.mem.bytes_at(buffer1Data.cast(), buffer_size);
+        let non_zero = bytes.iter().filter(|&&sample| sample != 0).count();
+        log!("iOS audio diagnostic: guest callback BEFORE frame={} proc={:?} refcon={:?} frames={} sample_rate={} channels={} bits={} bytes={} non_zero_bytes={}",
+            callback_frame, inputProc, inputProcRefCon, number_frames, sample_rate,
+            stream_format.channels_per_frame, stream_format.bits_per_channel,
+            bytes.len(), non_zero);
+    }
+    let () = inputProc.call_from_host(
+        env,
+        (
+            inputProcRefCon,
+            action_flags,
+            nil.cast_void().cast_const(),
+            0u32,
+            number_frames,
+            audio_buffer_list,
+        ),
+    );
+    #[cfg(target_os = "ios")]
+    if callback_frame <= 10 || callback_frame % 120 == 0 {
+        let bytes = env.mem.bytes_at(buffer1Data.cast(), buffer_size);
+        let non_zero = bytes.iter().filter(|&&sample| sample != 0).count();
+        log!("iOS audio diagnostic: guest callback AFTER frame={} proc={:?} refcon={:?} bytes={} non_zero_bytes={}",
+            callback_frame, inputProc, inputProcRefCon, bytes.len(), non_zero);
+    }
+
+    let at_state = &mut env.framework_state.audio_toolbox;""",
+        "guest AudioUnit callback PCM before and after",
+    )
+
     # Record AudioUnit start and whether the guest callback supplies non-zero
     # PCM before OpenAL queues it for the native output device.
     replace_once(
