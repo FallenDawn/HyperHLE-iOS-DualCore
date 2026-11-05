@@ -163,10 +163,11 @@ jobs:
             upstream/HyperHLE-Reborn/platform/ios/patches/dynarmic-ios-jit.patch \
             upstream/touchHLE/build/dynarmic-ios-src)"
           python3 scripts/patch-touchhle-dynarmic-ios15-jit.py "$patched"
-          grep -q "MAP_PRIVATE | MAP_JIT" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
-          grep -q "pthread_jit_write_protect_np(1)" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
-          if grep -q "brk #0xf00d" "$patched/externals/oaknut/include/oaknut/code_block.hpp"; then
-            echo "Core B must not require an unserviced StikDebug BRK trap on iOS 15." >&2
+          grep -q "PROT_READ | PROT_WRITE | PROT_EXEC" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
+          grep -q "mprotect(m_memory, m_size, PROT_READ | PROT_EXEC)" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
+          grep -q "mprotect(m_memory, m_size, PROT_READ | PROT_WRITE)" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
+          if grep -Eq "brk #0xf00d|pthread_jit_write_protect_np" "$patched/externals/oaknut/include/oaknut/code_block.hpp"; then
+            echo "Core B must use the iOS 15 debugger-backed mprotect JIT path." >&2
             exit 1
           fi
           echo "TOUCHHLE_DYNARMIC_DIR=$GITHUB_WORKSPACE/$patched" >> "$GITHUB_ENV"
