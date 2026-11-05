@@ -299,3 +299,40 @@ replace_once(
 # Persist the NPOT fix added above; the earlier write_text() belongs to the
 # diagnostics patch section and runs before this additional source rewrite.
 path.write_text(source)
+
+
+// On iOS, SDL's logical window size can differ from the actual OpenGL
+// drawable size (e.g. 1440x960 vs 1024x768 on the tested iPad). The old
+// non-fullscreen fast return produced a viewport larger than the drawable.
+// The final presentation quad was therefore rendered/read back against
+// mismatched dimensions. Always compute the iOS viewport from drawable_size,
+// retaining the guest aspect ratio and centering it inside the real drawable.
+window_path = core / "src/window.rs"
+window_source = window_path.read_text()
+window_anchor = """        if !self.fullscreen && !Self::rotatable_fullscreen() {
+            return (0, 0, app_width, app_height);
+        }
+
+        let (screen_width, screen_height) = self.window.drawable_size();"""
+window_replacement = """        // SDL iOS may report a logical window size different from the GL
+        // drawable size. The viewport is consumed by OpenGL, so it must use
+        // drawable pixels even when the SDL window is not marked fullscreen.
+        if !self.fullscreen
+            && !Self::rotatable_fullscreen()
+            && !cfg!(target_os = "ios")
+        {
+            return (0, 0, app_width, app_height);
+        }
+
+        let (screen_width, screen_height) = self.window.drawable_size();"""
+if window_replacement in window_source:
+    print("already patched: iOS drawable-sized viewport")
+else:
+    count = window_source.count(window_anchor)
+    if count != 1:
+        raise SystemExit(
+            f"iOS drawable-sized viewport: expected one source anchor, found {count}"
+        )
+    window_source = window_source.replace(window_anchor, window_replacement, 1)
+    window_path.write_text(window_source)
+    print("patched: iOS drawable-sized viewport")
