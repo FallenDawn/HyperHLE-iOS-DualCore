@@ -288,12 +288,15 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
     };
     #[cfg(target_os = "ios")]
     if callback_frame <= 10 || callback_frame % 120 == 0 {
+        // AudioStreamBasicDescription is packed; copy fields before formatting
+        // to avoid creating unaligned references in log/format_args!.
+        let channels_per_frame = stream_format.channels_per_frame;
+        let bits_per_channel = stream_format.bits_per_channel;
         let bytes = env.mem.bytes_at(buffer1Data.cast(), buffer_size);
         let non_zero = bytes.iter().filter(|&&sample| sample != 0).count();
         log!("iOS audio diagnostic: guest callback BEFORE frame={} proc={:?} refcon={:?} frames={} sample_rate={} channels={} bits={} bytes={} non_zero_bytes={}",
             callback_frame, inputProc, inputProcRefCon, number_frames, sample_rate,
-            stream_format.channels_per_frame, stream_format.bits_per_channel,
-            bytes.len(), non_zero);
+            channels_per_frame, bits_per_channel, bytes.len(), non_zero);
     }
     let () = inputProc.call_from_host(
         env,
