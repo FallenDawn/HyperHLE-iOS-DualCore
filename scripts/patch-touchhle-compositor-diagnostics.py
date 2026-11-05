@@ -138,3 +138,40 @@ replace_once(
 "CAEAGLLayer texture upload result")
 
 path.write_text(source)
+
+
+# The compositor and splash-screen path use a separate internal GLES context.
+# Do not inherit fixed-function state from earlier internal draws: a stale
+# scissor/depth/stencil/alpha/cull state or texture-env mode can make the
+# final textured quad appear blank or partially clipped on iOS.
+present_path = core / "src/gles/present.rs"
+present_source = present_path.read_text()
+present_anchor = """    // Draw the quad
+    gles.Viewport("""
+present_replacement = """    // Normalize the fixed-function state required by this presentation pass.
+    // The EAGL fast path backs up and restores these states around this call;
+    // the Core Animation compositor uses its private context and intentionally
+    // leaves it in a known state for the next composition frame.
+    gles.Disable(gles11::SCISSOR_TEST);
+    gles.Disable(gles11::ALPHA_TEST);
+    gles.Disable(gles11::DEPTH_TEST);
+    gles.Disable(gles11::STENCIL_TEST);
+    gles.Disable(gles11::CULL_FACE);
+    gles.Disable(gles11::BLEND);
+    gles.TexEnvi(
+        gles11::TEXTURE_ENV,
+        gles11::TEXTURE_ENV_MODE,
+        gles11::REPLACE as _,
+    );
+
+    // Draw the quad
+    gles.Viewport("""
+if present_replacement in present_source:
+    print("already patched: deterministic present_frame state")
+else:
+    count = present_source.count(present_anchor)
+    if count != 1:
+        raise SystemExit(f"deterministic present_frame state: expected one source anchor, found {count}")
+    present_source = present_source.replace(present_anchor, present_replacement, 1)
+    present_path.write_text(present_source)
+    print("patched: deterministic present_frame state")
