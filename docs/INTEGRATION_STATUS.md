@@ -22,7 +22,8 @@ Last checked: 2026-11-05
 ## Remaining device validation
 
 - [x] Diagnose the first Core B crash from the iPad .ips report: SIGTRAP at `oaknut::detail::prepare_jit_region()` executing `brk #0xf00d`, before guest code execution.
-- [ ] Build and install the Core B-only MAP_JIT correction; confirm it no longer enters the unserviced StikDebug breakpoint path.
+- [x] Run #49 confirmed the first JIT correction failed to compile because `pthread_jit_write_protect_np` is unavailable on iOS.
+- [ ] Build and install the corrected Core B-only RWX + `mprotect()` implementation; confirm it no longer enters the unserviced StikDebug breakpoint path.
 - [ ] Confirm JIT entitlements and behavior on the target iPad running iOS 15.
 - [ ] Launch a known-compatible game using touchHLE v0.3.0.
 - [ ] Validate touch/controller input, orientation, graphics and audio.
