@@ -140,6 +140,10 @@ new_check = """#if defined(_WIN32)
         if (m_memory == MAP_FAILED)
 #endif
             throw std::bad_alloc{};
+
+        // The shared Dynarmic iOS patch constructs CodeGenerator with
+        // {wptr(), xptr()}; this legacy single-map path uses one address.
+        m_wmemory = m_memory;
 """
 replace_once(old_check, new_check, "use MAP_FAILED allocation check")
 
@@ -201,6 +205,8 @@ if "mprotect(m_memory, m_size, PROT_READ | PROT_EXEC)" not in text:
     raise SystemExit("RX protection transition is missing")
 if "mprotect(m_memory, m_size, PROT_READ | PROT_WRITE)" not in text:
     raise SystemExit("RW protection transition is missing")
+if "m_wmemory = m_memory;" not in text:
+    raise SystemExit("single-map writable alias is not initialized")
 if "pthread_jit_write_protect_np" in text:
     raise SystemExit("pthread_jit_write_protect_np must not be used for physical iOS")
 
