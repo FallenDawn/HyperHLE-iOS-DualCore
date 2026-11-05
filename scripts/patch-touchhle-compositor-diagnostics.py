@@ -224,6 +224,40 @@ else:
 
 
 
+# Capture SDL's drawable FBO before binding the compositor's private FBO.
+# iOS uses an EAGL drawable framebuffer object; framebuffer 0 is not the screen.
+replace_once(
+'''    let window = env.window.as_mut().unwrap();
+    let mut gles = window.make_internal_gl_ctx_current();
+
+    // Set up GL objects needed for render-to-texture.''',
+'''    let window = env.window.as_mut().unwrap();
+    let mut gles = window.make_internal_gl_ctx_current();
+
+    // Preserve SDL's actual iOS drawable framebuffer before switching to the compositor FBO.
+    let mut window_framebuffer: i32 = 0;
+    unsafe {
+        gles.GetIntegerv(gles11::FRAMEBUFFER_BINDING_OES, &mut window_framebuffer);
+    }
+    #[cfg(target_os = "ios")]
+    log!("iOS compositor diagnostic: captured SDL drawable framebuffer={}", window_framebuffer);
+
+    // Set up GL objects needed for render-to-texture.''',
+"capture SDL iOS drawable framebuffer")
+
+replace_once(
+'''        gles.BindTexture(gles11::TEXTURE_2D, texture);
+        gles.BindFramebufferOES(gles11::FRAMEBUFFER_OES, 0);
+        present_frame(''',
+'''        gles.BindTexture(gles11::TEXTURE_2D, texture);
+        // Restore SDL's actual iOS drawable FBO before drawing and swapping.
+        gles.BindFramebufferOES(
+            gles11::FRAMEBUFFER_OES,
+            window_framebuffer as _,
+        );
+        present_frame(''',
+"present into SDL iOS drawable framebuffer")
+
 # Read back the actual composition FBO before it is copied to SDL's default
 # framebuffer. This separates layer composition failures from presentation.
 replace_once(
