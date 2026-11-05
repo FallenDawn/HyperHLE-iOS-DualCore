@@ -301,12 +301,12 @@ replace_once(
 path.write_text(source)
 
 
-// On iOS, SDL's logical window size can differ from the actual OpenGL
-// drawable size (e.g. 1440x960 vs 1024x768 on the tested iPad). The old
-// non-fullscreen fast return produced a viewport larger than the drawable.
-// The final presentation quad was therefore rendered/read back against
-// mismatched dimensions. Always compute the iOS viewport from drawable_size,
-// retaining the guest aspect ratio and centering it inside the real drawable.
+# On iOS, SDL's logical window size can differ from the actual OpenGL
+# drawable size (e.g. 1440x960 vs 1024x768 on the tested iPad). The old
+# non-fullscreen fast return produced a viewport larger than the drawable.
+# The final presentation quad was therefore rendered/read back against
+# mismatched dimensions. Always compute the iOS viewport from drawable_size,
+# retaining the guest aspect ratio and centering it inside the real drawable.
 window_path = core / "src/window.rs"
 window_source = window_path.read_text()
 window_anchor = """        if !self.fullscreen && !Self::rotatable_fullscreen() {
