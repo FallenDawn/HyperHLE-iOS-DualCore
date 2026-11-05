@@ -222,5 +222,52 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
         "borrow core-specific default options path",
     )
 
+
+    # OpenAL Soft must use its native iOS CoreAudio/RemoteIO backend.
+    # Do not allow a successful static build that silently contains no
+    # usable playback backend.
+    replace_once(
+        "src/audio/openal_soft_wrapper/build.rs",
+        '        build.define("ALSOFT_EXAMPLES", "OFF");',
+        '        build.define("ALSOFT_EXAMPLES", "OFF");\n\n        if os.eq_ignore_ascii_case("ios") {\n            build.define("ALSOFT_REQUIRE_COREAUDIO", "ON");\n            build.define("ALSOFT_BACKEND_COREAUDIO", "ON");\n        }',
+        "require OpenAL Soft CoreAudio backend on iOS",
+    )
+    replace_once(
+        "src/audio/openal_soft_wrapper/build.rs",
+        '        if os.eq_ignore_ascii_case("macos") {\n            link_framework("AudioToolbox");\n            link_framework("CoreAudio");\n            link_framework("CoreFoundation");\n        }',
+        '        if os.eq_ignore_ascii_case("macos") {\n            link_framework("AudioToolbox");\n            link_framework("CoreAudio");\n            link_framework("CoreFoundation");\n        }\n        if os.eq_ignore_ascii_case("ios") {\n            link_framework("AudioToolbox");\n            link_framework("CoreAudio");\n            link_framework("CoreFoundation");\n        }',
+        "link iOS CoreAudio frameworks",
+    )
+
+    # Log the actual OpenAL device/context creation on-device. A successful
+    # compile alone does not prove that RemoteIO opened at runtime.
+    replace_once(
+        "src/audio/openal.rs",
+        '        let device = unsafe { al_sys::alcOpenDevice(std::ptr::null()) };\n        if device.is_null() {',
+        '        let device = unsafe { al_sys::alcOpenDevice(std::ptr::null()) };\n        #[cfg(target_os = "ios")]\n        log!("iOS audio diagnostic: alcOpenDevice(default) -> {:?}", device);\n        if device.is_null() {\n            #[cfg(target_os = "ios")]\n            log!("iOS audio diagnostic: OpenAL device open failed, ALC error=0x{:x}", unsafe { al_sys::alcGetError(std::ptr::null_mut()) });',
+        "OpenAL iOS device-open diagnostics",
+    )
+    replace_once(
+        "src/audio/openal.rs",
+        '        let context = unsafe { al_sys::alcCreateContext(device, attrlist) };\n        if context.is_null() {',
+        '        let context = unsafe { al_sys::alcCreateContext(device, attrlist) };\n        #[cfg(target_os = "ios")]\n        log!("iOS audio diagnostic: alcCreateContext(device={:?}) -> {:?}", device, context);\n        if context.is_null() {',
+        "OpenAL iOS context diagnostics",
+    )
+
+    # Record AudioUnit start and whether the guest callback supplies non-zero
+    # PCM before OpenAL queues it for the native output device.
+    replace_once(
+        "src/frameworks/audio_toolbox/audio_unit.rs",
+        '    log_dbg!("AudioOutputUnitStart({:?}) -> {:?}", ci, result);',
+        '    log_dbg!("AudioOutputUnitStart({:?}) -> {:?}", ci, result);\n    #[cfg(target_os = "ios")]\n    log!("iOS audio diagnostic: AudioOutputUnitStart unit={:?} source={} result={}", ci, source, result);',
+        "AudioUnit output start diagnostics",
+    )
+    replace_once(
+        "src/frameworks/audio_toolbox/audio_unit.rs",
+        '    let (al_format, _sample_rate, processed_data) =\n        decode_buffer(&env.mem, &stream_format, buffer1Data.cast(), buffer_size);',
+        '    let (al_format, _sample_rate, processed_data) =\n        decode_buffer(&env.mem, &stream_format, buffer1Data.cast(), buffer_size);\n    #[cfg(target_os = "ios")]\n    {\n        use std::sync::atomic::{AtomicU64, Ordering};\n        static AUDIO_PCM_LOG_COUNT: AtomicU64 = AtomicU64::new(0);\n        let frame = AUDIO_PCM_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;\n        if frame <= 10 || frame % 120 == 0 {\n            let non_zero = processed_data.iter().filter(|&&sample| sample != 0).count();\n            log!("iOS audio diagnostic: AudioUnit PCM frame={} frames={} sample_rate={} bytes={} non_zero_bytes={} format=0x{:x}",\n                frame, number_frames, sample_rate, processed_data.len(), non_zero, al_format);\n        }\n    }',
+        "AudioUnit PCM callback diagnostics",
+    )
+
 if __name__ == "__main__":
     main()
