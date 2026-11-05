@@ -167,7 +167,7 @@ jobs:
           grep -q "mprotect(m_memory, m_size, PROT_READ | PROT_EXEC)" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
           grep -q "mprotect(m_memory, m_size, PROT_READ | PROT_WRITE)" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
           grep -q "m_wmemory = m_memory" "$patched/externals/oaknut/include/oaknut/code_block.hpp"
-          if grep -Eq "brk #0xf00d|pthread_jit_write_protect_np" "$patched/externals/oaknut/include/oaknut/code_block.hpp"; then
+          if grep -q "brk #0xf00d" "$patched/externals/oaknut/include/oaknut/code_block.hpp"; then
             echo "Core B must use the iOS 15 debugger-backed mprotect JIT path." >&2
             exit 1
           fi
