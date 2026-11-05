@@ -223,6 +223,79 @@ else:
 # different texture bound when the FBO is reused.
 
 
+
+# Read back the actual composition FBO before it is copied to SDL's default
+# framebuffer. This separates layer composition failures from presentation.
+replace_once(
+'''    // Present our rendered frame (bound to TEXTURE_2D). This copies it to the
+    // default framebuffer (0) so we need to unbind our internal framebuffer.
+    unsafe {''',
+'''    // iOS diagnostic: inspect the composition FBO before presentation.
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static FBO_READBACK_COUNT: AtomicU64 = AtomicU64::new(0);
+        let frame = FBO_READBACK_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if frame <= 8 || frame % 60 == 0 {
+            let mut pixels = vec![0u8; fb_width as usize * fb_height as usize * 4];
+            unsafe {
+                gles.Finish();
+                gles.ReadPixels(
+                    0, 0, fb_width as _, fb_height as _,
+                    gles11::RGBA, gles11::UNSIGNED_BYTE,
+                    pixels.as_mut_ptr() as *mut _,
+                );
+            }
+            let non_black = pixels.chunks_exact(4)
+                .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
+                .count();
+            let alpha_nonzero = pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+            let gl_error = unsafe { gles.GetError() };
+            log!("iOS compositor readback: stage=composition_fbo frame={} size={}x{} non_black={}/{} alpha_nonzero={}/{} gl_error=0x{:x}",
+                frame, fb_width, fb_height, non_black, fb_width as usize * fb_height as usize,
+                alpha_nonzero, fb_width as usize * fb_height as usize, gl_error);
+        }
+    }
+
+    // Present our rendered frame (bound to TEXTURE_2D). This copies it to the
+    // default framebuffer (0) so we need to unbind our internal framebuffer.
+    unsafe {''',
+"composition FBO pixel readback")
+
+# Read back SDL's default framebuffer after present_frame and before swap.
+replace_once(
+'''    std::mem::drop(gles);
+    window.swap_window();''',
+'''    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static SDL_READBACK_COUNT: AtomicU64 = AtomicU64::new(0);
+        let frame = SDL_READBACK_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if frame <= 8 || frame % 60 == 0 {
+            let (vx, vy, vw, vh) = present_frame_args.0;
+            let mut pixels = vec![0u8; vw as usize * vh as usize * 4];
+            unsafe {
+                gles.Finish();
+                gles.ReadPixels(
+                    vx as _, vy as _, vw as _, vh as _,
+                    gles11::RGBA, gles11::UNSIGNED_BYTE,
+                    pixels.as_mut_ptr() as *mut _,
+                );
+            }
+            let non_black = pixels.chunks_exact(4)
+                .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
+                .count();
+            let alpha_nonzero = pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+            let gl_error = unsafe { gles.GetError() };
+            log!("iOS compositor readback: stage=sdl_default_framebuffer frame={} viewport=({}, {}, {}, {}) non_black={}/{} alpha_nonzero={}/{} gl_error=0x{:x}",
+                frame, vx, vy, vw, vh, non_black, vw as usize * vh as usize,
+                alpha_nonzero, vw as usize * vh as usize, gl_error);
+        }
+    }
+    std::mem::drop(gles);
+    window.swap_window();''',
+"SDL default framebuffer pixel readback")
+
 # Persist the NPOT fix added above; the earlier write_text() belongs to the
 # diagnostics patch section and runs before this additional source rewrite.
 path.write_text(source)
