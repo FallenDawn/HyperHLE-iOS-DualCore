@@ -153,7 +153,7 @@ old_dtor = """#    if defined(__APPLE__) && TARGET_OS_IPHONE && !TARGET_OS_SIMUL
 #    endif
         munmap(m_memory, m_size);
 """
-replace_once(old_dtor, "        munmap(m_memory, m_size);\\n", "remove broker alias teardown")
+replace_once(old_dtor, "        munmap(m_memory, m_size);\n", "remove broker alias teardown")
 
 replace_once("""#if defined(__APPLE__) && !TARGET_OS_IPHONE
         pthread_jit_write_protect_np(1);
