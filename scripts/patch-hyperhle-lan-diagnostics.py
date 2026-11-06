@@ -213,13 +213,10 @@ if return_patch not in source:
         raise SystemExit("could not patch game-return upload trigger")
     source = source.replace(return_anchor, return_patch, 1)
 
-# Remove manual IP/token fields; Bonjour discovers the receiver automatically.
+# Add editable direct-IP settings and a real health-check action.
 settings_start = source.index("private struct SettingsView: View {")
 settings_end = source.index("private struct CoreChoiceRow", settings_start)
 settings = source[settings_start:settings_end]
-settings = settings.replace('''
-    @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = ""
-    @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""''', "")
 settings = settings.replace(
     "private struct SettingsView: View {",
     "private struct SettingsView: View {\n"
@@ -228,7 +225,18 @@ settings = settings.replace(
     '    @State private var diagnosticsConnectionStatus = ""\n',
     1,
 )
-old_section = '''                Section {
+settings_anchor = '''                Section("Controls") {
+                    Toggle("Analog Sticks Control Tilt", isOn: $analogTilt)
+                }
+
+                Section {
+                    EnableJITButton()
+'''
+settings_replacement = '''                Section("Controls") {
+                    Toggle("Analog Sticks Control Tilt", isOn: $analogTilt)
+                }
+
+                Section {
                     TextField("Windows PC IP", text: $diagnosticsHost)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -240,7 +248,7 @@ old_section = '''                Section {
                             let host = diagnosticsHost.trimmingCharacters(in: .whitespacesAndNewlines)
                             let port = Int(diagnosticsPort) ?? 0
                             guard !host.isEmpty, (1...65535).contains(port),
-                                  let url = URL(string: "http://\\(host):\\(port)/health") else {
+                                  let url = URL(string: "http://\(host):\(port)/health") else {
                                 diagnosticsConnectionStatus = "Invalid IP or port"
                                 return
                             }
@@ -252,7 +260,7 @@ old_section = '''                Section {
                                     diagnosticsConnectionStatus = "Receiver did not return HTTP 200"
                                 }
                             } catch {
-                                diagnosticsConnectionStatus = "Connection failed: \\(error.localizedDescription)"
+                                diagnosticsConnectionStatus = "Connection failed: \(error.localizedDescription)"
                             }
                         }
                     }
@@ -265,22 +273,15 @@ old_section = '''                Section {
                 } header: {
                     Text("LAN Diagnostics")
                 } footer: {
-                    Text("Enter the Windows PC IP and receiver port (default 8765). Logs are uploaded automatically after a game exits and retried when the app starts. The Windows receiver must be running on the same LAN.")
+                    Text("Logs are uploaded automatically when HyperHLE starts and after a game exits. Keep the Windows receiver running on the same LAN.")
                 }
-'''
-new_section = '''                Section {
-                    Text("Automatic LAN diagnostics")
-                    Text("HyperHLE discovers the Windows receiver automatically and uploads queued logs when a game exits. Keep the receiver running on the same Wi-Fi or LAN.")
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                } header: {
-                    Text("LAN Diagnostics")
-                }
-'''
-if old_section in settings:
-    settings = settings.replace(old_section, old_section, 1)
-source = source[:settings_start] + settings + source[settings_end:]
 
+                Section {
+                    EnableJITButton()
+'''
+if(!settings.includes(settings_anchor)){text("Controls/JIT insertion anchor not found; no write performed.");exit();}
+settings=settings.replace(settings_anchor,settings_replacement);
+source=source[:settings_start]+settings+source[settings_end:]
 swift_path.write_text(source)
 
 plist = plistlib.loads(plist_path.read_bytes())
