@@ -151,3 +151,168 @@ replace_once(
 "readback pixel-content diagnostics")
 
 path.write_text(source)
+
+
+# Instrument the guest application's GLES 1.1 entry points. The EAGL
+# renderbuffer can be black either because the guest never issues draws or
+# because its draw state/data is not accepted by the native driver. These
+# counters distinguish those cases without logging every call indefinitely.
+guest_path = CORE / "src/frameworks/opengles/gles_guest.rs"
+guest = guest_path.read_text()
+
+def guest_replace(old: str, new: str, label: str) -> None:
+    global guest
+    if new in guest:
+        print(f"already patched: {label}")
+        return
+    count = guest.count(old)
+    if count != 1:
+        raise SystemExit(f"{label}: expected one guest GLES source anchor, found {count}")
+    guest = guest.replace(old, new, 1)
+    print(f"patched: {label}")
+
+guest_replace(
+'''fn glViewport(env: &mut Environment, x: GLint, y: GLint, width: GLsizei, height: GLsizei) {
+    // apply scale hack: assume framebuffer's size is larger than the app thinks
+    // and scale viewport appropriately
+    let factor = env.options.scale_hack.get() as GLsizei;
+    let (x, y) = (x * factor, y * factor);
+    let (width, height) = (width * factor, height * factor);
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.Viewport(x, y, width, height)
+    })
+}''',
+'''fn glViewport(env: &mut Environment, x: GLint, y: GLint, width: GLsizei, height: GLsizei) {
+    // apply scale hack: assume framebuffer's size is larger than the app thinks
+    // and scale viewport appropriately
+    let factor = env.options.scale_hack.get() as GLsizei;
+    let (x, y) = (x * factor, y * factor);
+    let (width, height) = (width * factor, height * factor);
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if n <= 24 {
+            log!("iOS guest GLES: glViewport #{} guest=({}, {}, {}, {}) scaled=({}, {}, {}, {}) factor={}",
+                n, x / factor, y / factor, width / factor, height / factor,
+                x, y, width, height, factor);
+        }
+    }
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.Viewport(x, y, width, height)
+    })
+}''',
+"guest glViewport calls")
+
+guest_replace(
+'''fn glDrawArrays(env: &mut Environment, mode: GLenum, first: GLint, count: GLsizei) {
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        let fog_state_backup = clamp_fog_state_values(gles);
+        gles.DrawArrays(mode, first, count);
+        restore_fog_state_values(gles, fog_state_backup);
+    })
+}''',
+'''fn glDrawArrays(env: &mut Environment, mode: GLenum, first: GLint, count: GLsizei) {
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if n <= 48 || n % 500 == 0 {
+            log!("iOS guest GLES: glDrawArrays #{} mode=0x{:x} first={} count={}", n, mode, first, count);
+        }
+    }
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        let fog_state_backup = clamp_fog_state_values(gles);
+        gles.DrawArrays(mode, first, count);
+        restore_fog_state_values(gles, fog_state_backup);
+    })
+}''',
+"guest glDrawArrays calls")
+
+guest_replace(
+'''    indices: ConstVoidPtr,
+) {
+    with_ctx_and_mem(env, |gles, mem| unsafe {
+        let fog_state_backup = clamp_fog_state_values(gles);''',
+'''    indices: ConstVoidPtr,
+) {
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if n <= 48 || n % 500 == 0 {
+            log!("iOS guest GLES: glDrawElements #{} mode=0x{:x} count={} type=0x{:x} indices={:?}", n, mode, count, type_, indices);
+        }
+    }
+    with_ctx_and_mem(env, |gles, mem| unsafe {
+        let fog_state_backup = clamp_fog_state_values(gles);''',
+"guest glDrawElements calls")
+
+guest_replace(
+'''fn glClear(env: &mut Environment, mask: GLbitfield) {
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Clear(mask) });
+}''',
+'''fn glClear(env: &mut Environment, mask: GLbitfield) {
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if n <= 32 || n % 500 == 0 {
+            log!("iOS guest GLES: glClear #{} mask=0x{:x}", n, mask);
+        }
+    }
+    with_ctx_and_mem(env, |gles, _mem| unsafe { gles.Clear(mask) });
+}''',
+"guest glClear calls")
+
+guest_replace(
+'''    alpha: GLclampf,
+) {
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.ClearColor(red, green, blue, alpha)
+    });
+}''',
+'''    alpha: GLclampf,
+) {
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if n <= 32 {
+            log!("iOS guest GLES: glClearColor #{} rgba=({:.3}, {:.3}, {:.3}, {:.3})", n, red, green, blue, alpha);
+        }
+    }
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.ClearColor(red, green, blue, alpha)
+    });
+}''',
+"guest glClearColor calls")
+
+guest_replace(
+'''fn glBindFramebufferOES(env: &mut Environment, target: GLenum, framebuffer: GLuint) {
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.BindFramebufferOES(target, framebuffer)
+    })
+}''',
+'''fn glBindFramebufferOES(env: &mut Environment, target: GLenum, framebuffer: GLuint) {
+    #[cfg(target_os = "ios")]
+    {
+        use std::sync::atomic::{AtomicU64, Ordering};
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let n = COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+        if n <= 32 {
+            log!("iOS guest GLES: glBindFramebufferOES #{} target=0x{:x} framebuffer={}", n, target, framebuffer);
+        }
+    }
+    with_ctx_and_mem(env, |gles, _mem| unsafe {
+        gles.BindFramebufferOES(target, framebuffer)
+    })
+}''',
+"guest framebuffer binding calls")
+
+guest_path.write_text(guest)
