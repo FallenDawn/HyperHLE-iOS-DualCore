@@ -59,7 +59,7 @@ window_patch = (
     '            } else {\n'
     '                viewState = "rootView=not-loaded"\n'
     '            }\n'
-    '            NSLog("iOS window diagnostic: index=\\(index) class=\\(type(of: candidate)) hidden=\\(candidate.isHidden) alpha=\\(candidate.alpha) opaque=\\(candidate.isOpaque) level=\\(candidate.windowLevel.rawValue) key=\\(candidate.isKeyWindow) frame=\\(NSStringFromCGRect(candidate.frame)) root=\\(rootName) layerHidden=\\(candidate.layer.isHidden) layerOpacity=\\(candidate.layer.opacity) \\(viewState)")\n'
+    '            NSLog("iOS window diagnostic: index=\\(index) class=\\(type(of: candidate)) hidden=\\(candidate.isHidden) alpha=\\(candidate.alpha) opaque=\\(candidate.isOpaque) level=\\(candidate.windowLevel.rawValue) key=\\(candidate.isKeyWindow) frame=\\(NSCoder.string(for: candidate.frame)) root=\\(rootName) layerHidden=\\(candidate.layer.isHidden) layerOpacity=\\(candidate.layer.opacity) \\(viewState)")\n'
     '        }\n'
 )
 if window_patch not in text:
