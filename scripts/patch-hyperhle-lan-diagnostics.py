@@ -69,6 +69,24 @@ uploader = r'''private enum HyperHLEDiagnosticsUploader {
     private static let queueName = "HyperHLE-UploadQueue"
     private static let lastSnapshotKey = "hyperhleDiagnosticsLastSnapshot"
 
+    private static var liveTask: Task<Void, Never>?
+
+    static func startLiveCapture() {
+        guard liveTask == nil else { return }
+        liveTask = Task {
+            while !Task.isCancelled {
+                await uploadPending()
+                try? await Task.sleep(nanoseconds: 3_000_000_000)
+            }
+        }
+    }
+
+    static func stopLiveCapture() {
+        liveTask?.cancel()
+        liveTask = nil
+        Task { await uploadPending() }
+    }
+
     static func uploadPending() async {
         let defaults = UserDefaults.standard
         let discovered = await HyperHLEBonjourDiscovery.shared.discover()
@@ -270,6 +288,24 @@ if return_patch not in source:
     if source.count(return_anchor) != 1:
         raise SystemExit("could not patch game-return upload trigger")
     source = source.replace(return_anchor, return_patch, 1)
+
+launch_anchor = '''                let result = EmulatorCore.withRunning(core) {'''
+launch_patch = '''                HyperHLEDiagnosticsUploader.startLiveCapture()
+                let result = EmulatorCore.withRunning(core) {'''
+if launch_patch not in source:
+    if source.count(launch_anchor) != 1:
+        raise SystemExit("could not patch live upload start before game launch")
+    source = source.replace(launch_anchor, launch_patch, 1)
+
+live_return_anchor = '''                self.isLaunching = false
+                Task { await HyperHLEDiagnosticsUploader.uploadPending() }'''
+live_return_patch = '''                HyperHLEDiagnosticsUploader.stopLiveCapture()
+                self.isLaunching = false
+                Task { await HyperHLEDiagnosticsUploader.uploadPending() }'''
+if live_return_patch not in source:
+    if source.count(live_return_anchor) != 1:
+        raise SystemExit("could not patch live upload stop after game exit")
+    source = source.replace(live_return_anchor, live_return_patch, 1)
 
 # Add editable direct-IP settings and a real health-check action.
 settings_start = source.index("private struct SettingsView: View {")
