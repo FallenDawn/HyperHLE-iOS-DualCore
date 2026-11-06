@@ -359,10 +359,8 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
             static OPENAL_HANDOFF_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
             let frame = OPENAL_HANDOFF_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
             if frame <= 10 || frame % 120 == 0 {
-                let al_error = context.GetError();
-                log!("iOS audio diagnostic: OpenAL handoff frame={} source={} buffer={} queued_bytes={} source_state={} al_error=0x{:x}",
-                    frame, al_source, al_buffer, processed_data.len(),
-                    al_source_state, al_error);
+                log!("iOS audio diagnostic: OpenAL handoff frame={} source={} buffer={} queued_bytes={} source_state={}",
+                    frame, al_source, al_buffer, processed_data.len(), al_source_state);
             }
         }""",
         "OpenAL queue and playback handoff diagnostics",
