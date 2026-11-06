@@ -24,7 +24,7 @@ window_patch = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
             NSLog(@"iOS SDL window diagnostic: SDLWindow=%p uiwindow=%p scene=%p activation=%ld hidden=%d alpha=%.3f opaque=%d level=%.1f key=%d frame=%@ root=%@",
                   window, data.uiwindow, scene, (long)scene.activationState,
                   data.uiwindow.hidden, data.uiwindow.alpha, data.uiwindow.opaque,
-                  data.uiwindow.windowLevel.rawValue, data.uiwindow.isKeyWindow,
+                  data.uiwindow.windowLevel, data.uiwindow.isKeyWindow,
                   NSStringFromCGRect(data.uiwindow.frame),
                   data.uiwindow.rootViewController ? NSStringFromClass([data.uiwindow.rootViewController class]) : @"nil");
             NSUInteger index = 0;
@@ -33,7 +33,7 @@ window_patch = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
                 NSLog(@"iOS SDL scene stack: index=%lu class=%@ hidden=%d alpha=%.3f opaque=%d level=%.1f key=%d frame=%@ root=%@ rootViewHidden=%d rootViewAlpha=%.3f rootViewOpaque=%d rootBackground=%@",
                       (unsigned long)index++, NSStringFromClass([candidate class]),
                       candidate.hidden, candidate.alpha, candidate.opaque,
-                      candidate.windowLevel.rawValue, candidate.isKeyWindow,
+                      candidate.windowLevel, candidate.isKeyWindow,
                       NSStringFromCGRect(candidate.frame),
                       candidate.rootViewController ? NSStringFromClass([candidate.rootViewController class]) : @"nil",
                       rootView ? rootView.hidden : NO, rootView ? rootView.alpha : 1.0,
