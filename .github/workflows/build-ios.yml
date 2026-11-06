@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax-check integration scripts
-        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-touchhle-ace-xi-movie.py scripts/patch-touchhle-eagl-diagnostics.py scripts/patch-touchhle-compositor-diagnostics.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py scripts/patch-hyperhle-lan-diagnostics.py
+        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-sdl-uikit-diagnostics.py scripts/patch-touchhle-ace-xi-movie.py scripts/patch-touchhle-eagl-diagnostics.py scripts/patch-touchhle-compositor-diagnostics.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py scripts/patch-hyperhle-lan-diagnostics.py
       - name: Verify upstream refs
         run: bash scripts/verify-upstreams.sh
 
@@ -116,6 +116,14 @@ jobs:
           ninja --version
           python3 --version
           xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Patch SDL UIKit window and EAGL diagnostics
+        working-directory: upstream/HyperHLE-Reborn
+        run: |
+          set -euo pipefail
+          SDL_SRC="$(sh platform/ios/scripts/patched-source.sh \
+            vendor/SDL platform/ios/patches/sdl-ios-host.patch build/sdl-ios-src)"
+          python3 "${GITHUB_WORKSPACE}/scripts/patch-sdl-uikit-diagnostics.py" "$SDL_SRC"
 
       - name: Build shared SDL2
         working-directory: upstream/HyperHLE-Reborn
