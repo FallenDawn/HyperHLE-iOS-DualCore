@@ -20,6 +20,7 @@ marker = "private enum HyperHLEDiagnosticsUploader {"
 uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     static let shared = HyperHLEBonjourDiscovery()
     private var browser: NetServiceBrowser?
+    private var resolvingServices: [NetService] = []
     private var continuation: CheckedContinuation<(String, Int)?, Never>?
     private var finished = false
     private var cachedReceiver: (String, Int)?
@@ -41,6 +42,7 @@ uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServic
 
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         guard !finished else { return }
+        resolvingServices.append(service)
         service.delegate = self
         service.resolve(withTimeout: 5)
     }
@@ -63,6 +65,7 @@ uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServic
         finished = true
         browser?.stop()
         browser = nil
+        resolvingServices.removeAll()
         continuation?.resume(returning: result)
         continuation = nil
     }
@@ -76,7 +79,7 @@ private enum HyperHLEDiagnosticsUploader {
 
     static func startLiveCapture() {
         guard liveTask == nil else { return }
-        liveTask = Task {
+        liveTask = Task.detached {
             while !Task.isCancelled {
                 await uploadPending()
                 try? await Task.sleep(nanoseconds: 3_000_000_000)
@@ -334,6 +337,7 @@ settings_replacement = '''                Section("Controls") {
                 }
 
                 Section {
+                    Text("Bonjour automatically searches for the Windows receiver. IP below is only a fallback.")
                     TextField("Windows PC IP", text: $diagnosticsHost)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
