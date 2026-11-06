@@ -20,9 +20,11 @@ marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrow
     private var browser: NetServiceBrowser?
     private var continuation: CheckedContinuation<(String, Int)?, Never>?
     private var finished = false
+    private var cachedReceiver: (String, Int)?
 
     func discover(timeout: TimeInterval = 4) async -> (String, Int)? {
-        await withCheckedContinuation { continuation in
+        if let cachedReceiver { return cachedReceiver }
+        return await withCheckedContinuation { continuation in
             self.continuation = continuation
             self.finished = false
             let browser = NetServiceBrowser()
@@ -44,7 +46,8 @@ marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrow
     func netServiceDidResolveAddress(_ sender: NetService) {
         guard !finished, let host = sender.hostName?.trimmingCharacters(in: CharacterSet(charactersIn: ".")),
               !host.isEmpty, sender.port > 0 else { return }
-        finish((host, sender.port))
+        cachedReceiver = (host, sender.port)
+        finish(cachedReceiver)
     }
 
     func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {}
