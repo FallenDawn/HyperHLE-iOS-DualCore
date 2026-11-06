@@ -2,7 +2,7 @@
 """Add LAN diagnostics upload to the pinned HyperHLE iOS host.
 
 The receiver is the companion Windows HTTP server on port 8765. This patch
-uses a configured LAN address (no Bonjour dependency), keeps failed ZIPs in
+uses a automatically discovered Bonjour LAN receiver, keeps failed ZIPs in
 Documents/HyperHLE-UploadQueue, and retries them at app start / game exit.
 """
 from pathlib import Path
@@ -15,19 +15,63 @@ if len(sys.argv) != 3:
 swift_path, plist_path = map(Path, sys.argv[1:])
 source = swift_path.read_text()
 
-marker = "private enum HyperHLEDiagnosticsUploader {"
+marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
+    static let shared = HyperHLEBonjourDiscovery()
+    private var browser: NetServiceBrowser?
+    private var continuation: CheckedContinuation<String?, Never>?
+    private var timeoutWork: DispatchWorkItem?
+
+    func findReceiver() async -> String? {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            let browser = NetServiceBrowser()
+            self.browser = browser
+            browser.delegate = self
+            browser.searchForServices(ofType: "_hyperhle-diag._tcp.", inDomain: "local.")
+            let timeout = DispatchWorkItem { [weak self] in self?.finish(nil) }
+            timeoutWork = timeout
+            DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: timeout)
+        }
+    }
+
+    func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
+        service.delegate = self
+        service.resolve(withTimeout: 3)
+    }
+
+    func netServiceDidResolveAddress(_ sender: NetService) {
+        guard let hostname = sender.hostName?.trimmingCharacters(in: CharacterSet(charactersIn: ".")),
+              !hostname.isEmpty, sender.port > 0 else { return }
+        finish("\\(hostname):\\(sender.port)")
+    }
+
+    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
+        // Keep browsing until the discovery timeout.
+    }
+
+    private func finish(_ result: String?) {
+        guard let continuation else { return }
+        self.continuation = nil
+        timeoutWork?.cancel()
+        timeoutWork = nil
+        browser?.stop()
+        browser?.delegate = nil
+        browser = nil
+        continuation.resume(returning: result)
+    }
+}
+
+private enum HyperHLEDiagnosticsUploader {"
 uploader = r'''
 private enum HyperHLEDiagnosticsUploader {
     private static let queueName = "HyperHLE-UploadQueue"
-    private static let hostKey = "hyperhleDiagnosticsHost"
-    private static let tokenKey = "hyperhleDiagnosticsToken"
     private static let lastSnapshotKey = "hyperhleDiagnosticsLastSnapshot"
 
     static func uploadPending() async {
-        let defaults = UserDefaults.standard
-        let host = (defaults.string(forKey: hostKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        let token = (defaults.string(forKey: tokenKey) ?? "").trimmingCharacters(in: .whitespacesAndNewlines)
-        guard !host.isEmpty, !token.isEmpty else { return }
+        guard let host = await HyperHLEBonjourDiscovery.shared.findReceiver() else {
+            print("HyperHLE LAN diagnostics: no Windows receiver found on local network")
+            return
+        }
 
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let queue = documents.appendingPathComponent(queueName, isDirectory: true)
@@ -54,7 +98,6 @@ private enum HyperHLEDiagnosticsUploader {
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.timeoutInterval = 60
-                request.setValue(token, forHTTPHeaderField: "X-HyperHLE-Token")
                 request.setValue(Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "unknown",
                                  forHTTPHeaderField: "X-HyperHLE-Build")
                 request.setValue(Bundle.main.object(forInfoDictionaryKey: "HYPERHLE_GIT_COMMIT") as? String ?? "unknown",
@@ -215,20 +258,14 @@ if return_patch not in source:
         raise SystemExit("could not patch game-return upload trigger")
     source = source.replace(return_anchor, return_patch, 1)
 
-# Add fixed-IP and receiver-token settings in the existing Settings screen.
+# Remove manual IP/token fields; Bonjour discovers the receiver automatically.
 settings_start = source.index("private struct SettingsView: View {")
 settings_end = source.index("private struct CoreChoiceRow", settings_start)
 settings = source[settings_start:settings_end]
-if "hyperhleDiagnosticsHost" not in settings:
-    property_anchor = '''    @AppStorage("defaultCore") private var defaultCoreRaw = ""'''
-    property_patch = property_anchor + '''
+settings = settings.replace('''
     @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = ""
-    @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""'''
-    if settings.count(property_anchor) != 1:
-        raise SystemExit("could not locate SettingsView AppStorage properties")
-    settings = settings.replace(property_anchor, property_patch, 1)
-    advanced_anchor = '''                Section("Advanced") {'''
-    diagnostics_section = '''                Section {
+    @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""''', "")
+old_section = '''                Section {
                     TextField("Windows PC IP (e.g. 192.168.1.20)", text: $diagnosticsHost)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -242,18 +279,26 @@ if "hyperhleDiagnosticsHost" not in settings:
                 } footer: {
                     Text("Set the Windows receiver IP and token once. Logs upload automatically after a game exits and are retried on the next launch if the PC is unavailable. Port 8765 is used automatically.")
                 }
-
 '''
-    if settings.count(advanced_anchor) != 1:
-        raise SystemExit("could not locate SettingsView Advanced section")
-    settings = settings.replace(advanced_anchor, diagnostics_section + advanced_anchor, 1)
-    source = source[:settings_start] + settings + source[settings_end:]
+new_section = '''                Section {
+                    Text("Automatic LAN diagnostics")
+                    Text("HyperHLE discovers the Windows receiver automatically and uploads queued logs when a game exits. Keep the receiver running on the same Wi-Fi or LAN.")
+                        .font(.footnote)
+                        .foregroundStyle(.secondary)
+                } header: {
+                    Text("LAN Diagnostics")
+                }
+'''
+if old_section in settings:
+    settings = settings.replace(old_section, new_section, 1)
+source = source[:settings_start] + settings + source[settings_end:]
 
 swift_path.write_text(source)
 
 plist = plistlib.loads(plist_path.read_bytes())
 plist["NSLocalNetworkUsageDescription"] = (
-    "HyperHLE sends emulator diagnostic logs to your Windows PC on your local network."
+    "HyperHLE discovers your Windows PC and sends emulator diagnostic logs on your local network."
 )
+plist["NSBonjourServices"] = ["_hyperhle-diag._tcp"]
 plist_path.write_bytes(plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=False))
-print("patched: iOS LAN diagnostics queue, ZIP upload, retry triggers, Settings fields, and local-network privacy text")
+print("patched: iOS LAN diagnostics queue, ZIP upload, retry triggers, Bonjour discovery, tokenless upload, and local-network privacy text")
