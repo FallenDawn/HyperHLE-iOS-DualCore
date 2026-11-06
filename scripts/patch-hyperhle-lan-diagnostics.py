@@ -21,21 +21,27 @@ uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServic
     static let shared = HyperHLEBonjourDiscovery()
     private var browser: NetServiceBrowser?
     private var resolvingServices: [NetService] = []
-    private var continuation: CheckedContinuation<(String, Int)?, Never>?
+    private var continuations: [CheckedContinuation<(String, Int)?, Never>] = []
     private var finished = false
     private var cachedReceiver: (String, Int)?
 
     func discover(timeout: TimeInterval = 4) async -> (String, Int)? {
-        if let cachedReceiver { return cachedReceiver }
-        return await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            self.finished = false
-            let browser = NetServiceBrowser()
-            self.browser = browser
-            browser.delegate = self
-            browser.searchForServices(ofType: "_hyperhle-diag._tcp.", inDomain: "local.")
-            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
-                self?.finish(nil)
+        await withCheckedContinuation { continuation in
+            DispatchQueue.main.async {
+                if let cached = self.cachedReceiver {
+                    continuation.resume(returning: cached)
+                    return
+                }
+                self.continuations.append(continuation)
+                guard self.browser == nil else { return }
+                self.finished = false
+                let browser = NetServiceBrowser()
+                self.browser = browser
+                browser.delegate = self
+                browser.searchForServices(ofType: "_hyperhle-diag._tcp.", inDomain: "local.")
+                DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                    self?.finish(nil)
+                }
             }
         }
     }
@@ -66,8 +72,9 @@ uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServic
         browser?.stop()
         browser = nil
         resolvingServices.removeAll()
-        continuation?.resume(returning: result)
-        continuation = nil
+        let pending = continuations
+        continuations.removeAll()
+        pending.forEach { $0.resume(returning: result) }
     }
 }
 
