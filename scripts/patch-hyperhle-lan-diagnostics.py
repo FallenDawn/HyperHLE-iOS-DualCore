@@ -41,7 +41,7 @@ uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServic
     func netServiceDidResolveAddress(_ sender: NetService) {
         guard let hostname = sender.hostName?.trimmingCharacters(in: CharacterSet(charactersIn: ".")),
               !hostname.isEmpty, sender.port > 0 else { return }
-        finish("\\(hostname):\\(sender.port)")
+        finish("\(hostname):\(sender.port)")
     }
     func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {}
     private func finish(_ result: String?) {
@@ -83,7 +83,7 @@ private enum HyperHLEDiagnosticsUploader {
         ))?.filter { $0.pathExtension.lowercased() == "zip" }.sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
 
         guard !files.isEmpty else { return }
-        guard let url = URL(string: "http://\\(host)/upload") else { return }
+        guard let url = URL(string: "http://\(host)/upload") else { return }
 
         for file in files {
             do {
