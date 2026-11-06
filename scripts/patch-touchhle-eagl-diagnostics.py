@@ -66,6 +66,15 @@ replace_once(
         (renderbuffer as _, width, height)
     };
 
+    let framebuffer_binding: GLint = unsafe {
+        let mut framebuffer = 0;
+        gles.GetIntegerv(gles11::FRAMEBUFFER_BINDING_OES, &mut framebuffer);
+        framebuffer
+    };
+    #[cfg(target_os = "ios")]
+    log!("iOS EAGL diagnostic: present state renderbuffer={} size={}x{} framebuffer_binding={}",
+        renderbuffer, renderbuffer_width, renderbuffer_height, framebuffer_binding);
+
     std::mem::drop(gles);''',
 "presentRenderbuffer bound buffer dimensions")
 
