@@ -21,20 +21,20 @@ text = text.replace("configuration = .glass()", "configuration = .gray()")
 # The game controls are hosted in a higher-level UIWindow above SDL. A clear
 # background alone is insufficient: UIWindow inherits UIView's opaque default,
 # which can composite the overlay as black and hide the SDL game window beneath.
-host_window_anchor = '        controlsWindow.backgroundColor = .clear\\n'
+host_window_anchor = '        controlsWindow.backgroundColor = .clear\n'
 host_window_patch = (
-    '        controlsWindow.backgroundColor = .clear\\n'
-    '        controlsWindow.isOpaque = false\\n'
+    '        controlsWindow.backgroundColor = .clear\n'
+    '        controlsWindow.isOpaque = false\n'
 )
 if host_window_patch not in text:
     if text.count(host_window_anchor) != 1:
         raise SystemExit("could not uniquely locate game-controls UIWindow clear background")
     text = text.replace(host_window_anchor, host_window_patch, 1)
 
-view_anchor = '        viewController.loadViewIfNeeded()\\n'
+view_anchor = '        viewController.loadViewIfNeeded()\n'
 view_patch = (
-    '        viewController.loadViewIfNeeded()\\n'
-    '        viewController.view.isOpaque = false\\n'
+    '        viewController.loadViewIfNeeded()\n'
+    '        viewController.view.isOpaque = false\n'
 )
 if view_patch not in text:
     if text.count(view_anchor) != 1:
