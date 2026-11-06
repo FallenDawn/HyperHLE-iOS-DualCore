@@ -15,7 +15,55 @@ if len(sys.argv) != 3:
 swift_path, plist_path = map(Path, sys.argv[1:])
 source = swift_path.read_text()
 
-marker = "private enum HyperHLEDiagnosticsUploader {"
+marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
+    static let shared = HyperHLEBonjourDiscovery()
+    private var browser: NetServiceBrowser?
+    private var continuation: CheckedContinuation<(String, Int)?, Never>?
+    private var finished = false
+
+    func discover(timeout: TimeInterval = 4) async -> (String, Int)? {
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+            self.finished = false
+            let browser = NetServiceBrowser()
+            self.browser = browser
+            browser.delegate = self
+            browser.searchForServices(ofType: "_hyperhle-diag._tcp.", inDomain: "local.")
+            DispatchQueue.main.asyncAfter(deadline: .now() + timeout) { [weak self] in
+                self?.finish(nil)
+            }
+        }
+    }
+
+    func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
+        guard !finished else { return }
+        service.delegate = self
+        service.resolve(withTimeout: 5)
+    }
+
+    func netServiceDidResolveAddress(_ sender: NetService) {
+        guard !finished, let host = sender.hostName?.trimmingCharacters(in: CharacterSet(charactersIn: ".")),
+              !host.isEmpty, sender.port > 0 else { return }
+        finish((host, sender.port))
+    }
+
+    func netService(_ sender: NetService, didNotResolve errorDict: [String: NSNumber]) {}
+
+    func netServiceBrowser(_ browser: NetServiceBrowser, didNotSearch errorDict: [String: NSNumber]) {
+        finish(nil)
+    }
+
+    private func finish(_ result: (String, Int)?) {
+        guard !finished else { return }
+        finished = true
+        browser?.stop()
+        browser = nil
+        continuation?.resume(returning: result)
+        continuation = nil
+    }
+}
+
+private enum HyperHLEDiagnosticsUploader {"
 
 uploader = r'''private enum HyperHLEDiagnosticsUploader {
     private static let queueName = "HyperHLE-UploadQueue"
@@ -23,13 +71,17 @@ uploader = r'''private enum HyperHLEDiagnosticsUploader {
 
     static func uploadPending() async {
         let defaults = UserDefaults.standard
-        let host = defaults.string(forKey: "hyperhleDiagnosticsHost")?
+        let discovered = await HyperHLEBonjourDiscovery.shared.discover()
+        let manualHost = defaults.string(forKey: "hyperhleDiagnosticsHost")?
             .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
-        let portText = defaults.string(forKey: "hyperhleDiagnosticsPort") ?? "8765"
-        guard !host.isEmpty, let port = Int(portText), (1...65535).contains(port) else {
-            print("HyperHLE LAN diagnostics: configure a valid Windows receiver IP and port in Settings")
+        let manualPort = Int(defaults.string(forKey: "hyperhleDiagnosticsPort") ?? "8765") ?? 8765
+        let host = discovered?.0 ?? manualHost
+        let port = discovered?.1 ?? manualPort
+        guard !host.isEmpty, (1...65535).contains(port) else {
+            print("HyperHLE LAN diagnostics: Bonjour receiver not found and no manual IP configured")
             return
         }
+        print("HyperHLE LAN diagnostics: using receiver \(host):\(port)")
 
         let documents = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask)[0]
         let queue = documents.appendingPathComponent(queueName, isDirectory: true)
@@ -78,17 +130,23 @@ uploader = r'''private enum HyperHLEDiagnosticsUploader {
     ) throws {
         let names = ["touchhle-host.log", "touchhle-host-previous.log"]
         var entries: [(String, Data)] = []
-        var newestStamp: TimeInterval = 0
+        var newestStamp: TimeInterval = defaults.double(forKey: lastSnapshotKey)
         for name in names {
             let url = documents.appendingPathComponent(name)
-            guard let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
-                  let modified = attributes[.modificationDate] as? Date,
-                  let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
-            newestStamp = max(newestStamp, modified.timeIntervalSince1970)
-            entries.append((name, data))
+            guard let data = try? Data(contentsOf: url), !data.isEmpty else { continue }
+            let offsetKey = "hyperhleDiagnosticsOffset_\(name)"
+            var offset = defaults.integer(forKey: offsetKey)
+            if offset < 0 || offset > data.count { offset = 0 }
+            guard data.count > offset else { continue }
+            let delta = data.subdata(in: offset..<data.count)
+            entries.append((name, delta))
+            defaults.set(data.count, forKey: offsetKey)
+            if let attributes = try? FileManager.default.attributesOfItem(atPath: url.path),
+               let modified = attributes[.modificationDate] as? Date {
+                newestStamp = max(newestStamp, modified.timeIntervalSince1970)
+            }
         }
-        guard !entries.isEmpty,
-              newestStamp > defaults.double(forKey: lastSnapshotKey) else { return }
+        guard !entries.isEmpty else { return }
 
         let metadata: [String: String] = [
             "app": "HyperHLE",
@@ -288,6 +346,6 @@ plist = plistlib.loads(plist_path.read_bytes())
 plist["NSLocalNetworkUsageDescription"] = (
     "HyperHLE connects to your configured Windows PC and sends emulator diagnostic logs on your local network."
 )
-plist.pop("NSBonjourServices", None)
+plist["NSBonjourServices"] = ["_hyperhle-diag._tcp"]
 plist_path.write_bytes(plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=False))
 print("patched: iOS LAN diagnostics queue, ZIP upload, retry triggers, manual IP/port configuration and upload health check, and local-network privacy text")
