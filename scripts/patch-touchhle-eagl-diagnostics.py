@@ -128,9 +128,21 @@ replace_once(
                 let alpha_nonzero = pixels_vec.chunks_exact(4)
                     .filter(|p| p[3] != 0)
                     .count();
-                log!("iOS EAGL diagnostic: readback #{} size={}x{} bytes={} non_black_pixels={}/{} alpha_nonzero={}/{}",
+                let mut min_rgb = [u8::MAX; 3];
+                let mut max_rgb = [u8::MIN; 3];
+                let mut colors = std::collections::HashSet::<u16>::new();
+                let mut hash: u64 = 0xcbf29ce484222325;
+                for p in pixels_vec.chunks_exact(4) {
+                    for channel in 0..3 {
+                        min_rgb[channel] = min_rgb[channel].min(p[channel]);
+                        max_rgb[channel] = max_rgb[channel].max(p[channel]);
+                    }
+                    colors.insert(((p[0] as u16 >> 3) << 10) | ((p[1] as u16 >> 3) << 5) | (p[2] as u16 >> 3));
+                    for byte in &p[..3] { hash = (hash ^ *byte as u64).wrapping_mul(0x100000001b3); }
+                }
+                log!("iOS EAGL diagnostic: readback #{} size={}x{} bytes={} non_black_pixels={}/{} alpha_nonzero={}/{} unique_rgb555={} min_rgb={:?} max_rgb={:?} fnv64={:016x}",
                     frame, width, height, pixels_vec.len(), non_black, pixel_count,
-                    alpha_nonzero, pixel_count);
+                    alpha_nonzero, pixel_count, colors.len(), min_rgb, max_rgb, hash);
             }
         }
         present_pixels(env, drawable, pixels_vec, width, height);
