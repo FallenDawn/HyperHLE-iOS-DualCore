@@ -15,23 +15,17 @@ gl_source = gl_path.read_text()
 # This exact pair is introduced by the pinned v1.3.6 SDL host patch.
 window_anchor = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
         [data.uiwindow makeKeyAndVisible];"""
-window_patch = """        // TEMPORARY BLACK-SCREEN ISOLATION TEST.
-        data.uiwindow.windowLevel = UIWindowLevelAlert + 1.0;
+window_patch = """        // Keep SDL at the normal application window level.
+        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
         [data.uiwindow makeKeyAndVisible];
 
         if (@available(iOS 13.0, tvOS 13.0, *)) {
             UIWindowScene *scene = data.uiwindow.windowScene;
             if (scene) {
                 for (UIWindow *candidate in scene.windows) {
-                    if (candidate != data.uiwindow &&
-                        ([candidate.accessibilityIdentifier isEqualToString:@"touchHLE.gameControls"] ||
-                         [NSStringFromClass([candidate class]) containsString:@"GameControls"])) {
-                        NSLog(@"iOS BLACKSCREEN TEST: hiding controls window=%@", candidate);
-                        candidate.hidden = YES;
-                        candidate.alpha = 0.0;
-                    }
                 }
-                NSLog(@"iOS BLACKSCREEN TEST: SDLWindow=%p scene=%p activation=%ld level=%.1f key=%d frame=%@",
+                }
+                NSLog(@"iOS UIKit diagnostics: SDLWindow=%p scene=%p activation=%ld level=%.1f key=%d frame=%@",
                       data.uiwindow, scene, (long)scene.activationState,
                       data.uiwindow.windowLevel, data.uiwindow.isKeyWindow,
                       NSStringFromCGRect(data.uiwindow.frame));
