@@ -12,7 +12,25 @@ gl_path = root / "src/video/uikit/SDL_uikitopenglview.m"
 window_source = window_path.read_text()
 gl_source = gl_path.read_text()
 
-window_anchor = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
+window_anchor = """        // TEMPORARY AGGRESSIVE BLACK-SCREEN TEST:
+        // Put SDL above every ordinary app window and disable the separate
+        // SwiftUI controls overlay. This intentionally sacrifices on-screen
+        // controls for one diagnostic build; force-quit to leave the game.
+        data.uiwindow.windowLevel = UIWindowLevelAlert + 1.0;
+        [data.uiwindow makeKeyAndVisible];
+        if (@available(iOS 13.0, tvOS 13.0, *)) {
+            UIWindowScene *activeScene = data.uiwindow.windowScene;
+            for (UIWindow *candidate in activeScene.windows) {
+                if (candidate != data.uiwindow &&
+                    ([candidate.accessibilityIdentifier isEqualToString:@"touchHLE.gameControls"] ||
+                     [NSStringFromClass([candidate class]) containsString:@"GameControls"])) {
+                    NSLog(@"iOS BLACKSCREEN TEST: hiding controls window=%@ level=%.1f",
+                          candidate, candidate.windowLevel);
+                    candidate.hidden = YES;
+                    candidate.alpha = 0.0;
+                }
+            }
+        }
         [data.uiwindow makeKeyAndVisible];"""
 window_patch = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
         [data.uiwindow makeKeyAndVisible];
