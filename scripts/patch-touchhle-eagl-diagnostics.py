@@ -224,6 +224,50 @@ guest_replace(
         }
     }
     with_ctx_and_mem(env, |gles, _mem| unsafe {
+        #[cfg(target_os = "ios")]
+        {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static DRAW_STATE_COUNT: AtomicU64 = AtomicU64::new(0);
+            let state_n = DRAW_STATE_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+            if state_n <= 8 {
+                let mut viewport = [0; 4];
+                let mut scissor = [0; 4];
+                let mut vertex_size = 0;
+                let mut vertex_type = 0;
+                let mut vertex_stride = 0;
+                let mut vertex_buffer = 0;
+                let mut tex_size = 0;
+                let mut tex_type = 0;
+                let mut tex_stride = 0;
+                let mut tex_buffer = 0;
+                let mut texture_binding = 0;
+                let mut matrix_mode = 0;
+                let mut tex_env_mode = 0;
+                let mut current_color = [0.0; 4];
+                gles.GetIntegerv(gles11::VIEWPORT, viewport.as_mut_ptr());
+                gles.GetIntegerv(gles11::SCISSOR_BOX, scissor.as_mut_ptr());
+                gles.GetIntegerv(gles11::VERTEX_ARRAY_SIZE, &mut vertex_size);
+                gles.GetIntegerv(gles11::VERTEX_ARRAY_TYPE, &mut vertex_type);
+                gles.GetIntegerv(gles11::VERTEX_ARRAY_STRIDE, &mut vertex_stride);
+                gles.GetIntegerv(gles11::VERTEX_ARRAY_BUFFER_BINDING, &mut vertex_buffer);
+                gles.GetIntegerv(gles11::TEXTURE_COORD_ARRAY_SIZE, &mut tex_size);
+                gles.GetIntegerv(gles11::TEXTURE_COORD_ARRAY_TYPE, &mut tex_type);
+                gles.GetIntegerv(gles11::TEXTURE_COORD_ARRAY_STRIDE, &mut tex_stride);
+                gles.GetIntegerv(gles11::TEXTURE_COORD_ARRAY_BUFFER_BINDING, &mut tex_buffer);
+                gles.GetIntegerv(gles11::TEXTURE_BINDING_2D, &mut texture_binding);
+                gles.GetIntegerv(gles11::MATRIX_MODE, &mut matrix_mode);
+                gles.GetTexEnviv(gles11::TEXTURE_ENV, gles11::TEXTURE_ENV_MODE, &mut tex_env_mode);
+                gles.GetFloatv(gles11::CURRENT_COLOR, current_color.as_mut_ptr());
+                log!("iOS guest GLES state: draw={} viewport={:?} scissor={:?} vertex(enabled={},size={},type=0x{:x},stride={},vbo={}) texcoord(enabled={},size={},type=0x{:x},stride={},vbo={}) texture2d={} texture_binding={} blend={} alpha={} depth={} scissor_test={} fog={} matrix_mode=0x{:x} tex_env=0x{:x} current_color={:?}",
+                    state_n, viewport, scissor,
+                    gles.IsEnabled(gles11::VERTEX_ARRAY), vertex_size, vertex_type, vertex_stride, vertex_buffer,
+                    gles.IsEnabled(gles11::TEXTURE_COORD_ARRAY), tex_size, tex_type, tex_stride, tex_buffer,
+                    gles.IsEnabled(gles11::TEXTURE_2D), texture_binding,
+                    gles.IsEnabled(gles11::BLEND), gles.IsEnabled(gles11::ALPHA_TEST),
+                    gles.IsEnabled(gles11::DEPTH_TEST), gles.IsEnabled(gles11::SCISSOR_TEST),
+                    gles.IsEnabled(gles11::FOG), matrix_mode, tex_env_mode, current_color);
+            }
+        }
         let fog_state_backup = clamp_fog_state_values(gles);
         gles.DrawArrays(mode, first, count);
         restore_fog_state_values(gles, fog_state_backup);
