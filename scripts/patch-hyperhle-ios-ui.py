@@ -48,19 +48,19 @@ if 'controlsWindow.isOpaque = false' not in text or 'viewController.view.isOpaqu
 # renderer diagnostics already prove that EAGL and SDL have non-black pixels;
 # this identifies whether SDL's UIWindow is hidden, covered, transparent, or
 # below the controls overlay at the final presentation boundary.
-window_anchor = '        gameControlsWindow = controlsWindow\\n'
+window_anchor = '        gameControlsWindow = controlsWindow\n'
 window_patch = (
-    '        gameControlsWindow = controlsWindow\\n'
-    '        for (index, candidate) in windowScene.windows.enumerated() {\\n'
-    '            let rootName = candidate.rootViewController.map { String(describing: type(of: $0)) } ?? "nil"\\n'
-    '            let viewState: String\\n'
-    '            if let rootView = candidate.rootViewController?.viewIfLoaded {\\n'
-    '                viewState = "rootViewHidden=\\(rootView.isHidden) rootViewAlpha=\\(rootView.alpha) rootViewOpaque=\\(rootView.isOpaque) rootViewBackground=\\(String(describing: rootView.backgroundColor))"\\n'
-    '            } else {\\n'
-    '                viewState = "rootView=not-loaded"\\n'
-    '            }\\n'
-    '            NSLog("iOS window diagnostic: index=\\(index) class=\\(type(of: candidate)) hidden=\\(candidate.isHidden) alpha=\\(candidate.alpha) opaque=\\(candidate.isOpaque) level=\\(candidate.windowLevel.rawValue) key=\\(candidate.isKeyWindow) frame=\\(NSStringFromCGRect(candidate.frame)) root=\\(rootName) layerHidden=\\(candidate.layer.isHidden) layerOpacity=\\(candidate.layer.opacity) \\(viewState)")\\n'
-    '        }\\n'
+    '        gameControlsWindow = controlsWindow\n'
+    '        for (index, candidate) in windowScene.windows.enumerated() {\n'
+    '            let rootName = candidate.rootViewController.map { String(describing: type(of: $0)) } ?? "nil"\n'
+    '            let viewState: String\n'
+    '            if let rootView = candidate.rootViewController?.viewIfLoaded {\n'
+    '                viewState = "rootViewHidden=\\(rootView.isHidden) rootViewAlpha=\\(rootView.alpha) rootViewOpaque=\\(rootView.isOpaque) rootViewBackground=\\(String(describing: rootView.backgroundColor))"\n'
+    '            } else {\n'
+    '                viewState = "rootView=not-loaded"\n'
+    '            }\n'
+    '            NSLog("iOS window diagnostic: index=\\(index) class=\\(type(of: candidate)) hidden=\\(candidate.isHidden) alpha=\\(candidate.alpha) opaque=\\(candidate.isOpaque) level=\\(candidate.windowLevel.rawValue) key=\\(candidate.isKeyWindow) frame=\\(NSStringFromCGRect(candidate.frame)) root=\\(rootName) layerHidden=\\(candidate.layer.isHidden) layerOpacity=\\(candidate.layer.opacity) \\(viewState)")\n'
+    '        }\n'
 )
 if window_patch not in text:
     if text.count(window_anchor) != 1:
