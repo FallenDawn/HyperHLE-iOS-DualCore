@@ -2,8 +2,8 @@
 """Add LAN diagnostics upload to the pinned HyperHLE iOS host.
 
 The receiver is the companion Windows HTTP server on port 8765. This patch
-uses a automatically discovered Bonjour LAN receiver, keeps failed ZIPs in
-Documents/HyperHLE-UploadQueue, and retries them at app start / game exit.
+uses Bonjour to discover the Windows receiver and uploads incremental log
+segments during gameplay, queueing failed transfers for retry.
 """
 from pathlib import Path
 import plistlib
@@ -374,13 +374,14 @@ settings_replacement = '''                Section("Controls") {
                 } header: {
                     Text("LAN Diagnostics")
                 } footer: {
-                    Text("Logs are uploaded automatically when HyperHLE starts and after a game exits. Keep the Windows receiver running on the same LAN.")
+                    Text("Bonjour discovers the Windows receiver automatically. New log data is uploaded during gameplay every few seconds; failed uploads are queued and retried.")
                 }
 
                 Section {
                     EnableJITButton()
 '''
-if(!settings.includes(settings_anchor)){text("Controls/JIT insertion anchor not found; no write performed.");exit();}
+if settings_anchor not in settings:
+    raise SystemExit("Controls/JIT insertion anchor not found")
 settings=settings.replace(settings_anchor,settings_replacement);
 source=source[:settings_start]+settings+source[settings_end:]
 swift_path.write_text(source)
