@@ -228,7 +228,7 @@ if "hyperhleDiagnosticsHost" not in settings:
         raise SystemExit("could not locate SettingsView AppStorage properties")
     settings = settings.replace(property_anchor, property_patch, 1)
     advanced_anchor = '''                Section("Advanced") {'''
-    diagnostics_section = '''                Section("LAN Diagnostics") {
+    diagnostics_section = '''                Section {
                     TextField("Windows PC IP (e.g. 192.168.1.20)", text: $diagnosticsHost)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
@@ -237,6 +237,8 @@ if "hyperhleDiagnosticsHost" not in settings:
                     Button("Upload saved diagnostics now") {
                         Task { await HyperHLEDiagnosticsUploader.uploadPending() }
                     }
+                } header: {
+                    Text("LAN Diagnostics")
                 } footer: {
                     Text("Set the Windows receiver IP and token once. Logs upload automatically after a game exits and are retried on the next launch if the PC is unavailable. Port 8765 is used automatically.")
                 }
