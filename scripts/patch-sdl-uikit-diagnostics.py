@@ -35,6 +35,35 @@ window_patch = """        // TEMPORARY BLACK-SCREEN ISOLATION TEST.
                       data.uiwindow, scene, (long)scene.activationState,
                       data.uiwindow.windowLevel, data.uiwindow.isKeyWindow,
                       NSStringFromCGRect(data.uiwindow.frame));
+
+                // Dump every window and the first two levels of its view tree.
+                // This identifies a black/opaque view covering the SDL GL view.
+                for (UIWindow *candidate in scene.windows) {
+                    UIViewController *rootVC = candidate.rootViewController;
+                    UIView *rootView = rootVC.view;
+                    NSLog(@"iOS UIKit stack: window=%p class=%@ level=%.1f hidden=%d alpha=%.3f key=%d frame=%@ rootVC=%@ rootView=%@ rootFrame=%@ rootHidden=%d rootAlpha=%.3f subviews=%lu",
+                          candidate, NSStringFromClass([candidate class]),
+                          candidate.windowLevel, candidate.hidden, candidate.alpha,
+                          candidate.isKeyWindow, NSStringFromCGRect(candidate.frame),
+                          rootVC, rootView, NSStringFromCGRect(rootView.frame),
+                          rootView.hidden, rootView.alpha,
+                          (unsigned long)rootView.subviews.count);
+                    for (UIView *child in rootView.subviews) {
+                        NSLog(@"iOS UIKit view: window=%p view=%p class=%@ frame=%@ bounds=%@ hidden=%d alpha=%.3f opaque=%d bg=%@ layer=%@ z=%.2f subviews=%lu",
+                              candidate, child, NSStringFromClass([child class]),
+                              NSStringFromCGRect(child.frame), NSStringFromCGRect(child.bounds),
+                              child.hidden, child.alpha, child.opaque, child.backgroundColor,
+                              NSStringFromClass([child.layer class]), child.layer.zPosition,
+                              (unsigned long)child.subviews.count);
+                        for (UIView *grandchild in child.subviews) {
+                            NSLog(@"iOS UIKit view: parent=%p view=%p class=%@ frame=%@ hidden=%d alpha=%.3f opaque=%d bg=%@ layer=%@ z=%.2f",
+                                  child, grandchild, NSStringFromClass([grandchild class]),
+                                  NSStringFromCGRect(grandchild.frame), grandchild.hidden,
+                                  grandchild.alpha, grandchild.opaque, grandchild.backgroundColor,
+                                  NSStringFromClass([grandchild.layer class]), grandchild.layer.zPosition);
+                        }
+                    }
+                }
             }
         }
 
