@@ -220,6 +220,10 @@ settings = source[settings_start:settings_end]
 settings = settings.replace('''
     @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = ""
     @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""''', "")
+settings = settings.replace("private struct SettingsView: View {", """private struct SettingsView: View {
+    @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = "192.168.1.138"
+    @AppStorage("hyperhleDiagnosticsPort") private var diagnosticsPort = "8765"
+    @State private var diagnosticsConnectionStatus = """"", 1)
 old_section = '''                Section {
                     TextField("Windows PC IP", text: $diagnosticsHost)
                         .keyboardType(.URL)
@@ -270,7 +274,7 @@ new_section = '''                Section {
                 }
 '''
 if old_section in settings:
-    settings = settings.replace(old_section, new_section, 1)
+    settings = settings.replace(old_section, old_section, 1)
 source = source[:settings_start] + settings + source[settings_end:]
 
 swift_path.write_text(source)
