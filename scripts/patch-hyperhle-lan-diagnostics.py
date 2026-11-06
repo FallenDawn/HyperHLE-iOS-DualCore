@@ -15,7 +15,9 @@ if len(sys.argv) != 3:
 swift_path, plist_path = map(Path, sys.argv[1:])
 source = swift_path.read_text()
 
-marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
+marker = "private enum HyperHLEDiagnosticsUploader {"
+
+uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     static let shared = HyperHLEBonjourDiscovery()
     private var browser: NetServiceBrowser?
     private var continuation: CheckedContinuation<(String, Int)?, Never>?
@@ -66,9 +68,7 @@ marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrow
     }
 }
 
-private enum HyperHLEDiagnosticsUploader {"
-
-uploader = r'''private enum HyperHLEDiagnosticsUploader {
+private enum HyperHLEDiagnosticsUploader {
     private static let queueName = "HyperHLE-UploadQueue"
     private static let lastSnapshotKey = "hyperhleDiagnosticsLastSnapshot"
 
