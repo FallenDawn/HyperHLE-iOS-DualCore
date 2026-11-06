@@ -18,6 +18,32 @@ if button_count not in (0, 2):
     )
 text = text.replace("configuration = .glass()", "configuration = .gray()")
 
+# The game controls are hosted in a higher-level UIWindow above SDL. A clear
+# background alone is insufficient: UIWindow inherits UIView's opaque default,
+# which can composite the overlay as black and hide the SDL game window beneath.
+host_window_anchor = '        controlsWindow.backgroundColor = .clear\\n'
+host_window_patch = (
+    '        controlsWindow.backgroundColor = .clear\\n'
+    '        controlsWindow.isOpaque = false\\n'
+)
+if host_window_patch not in text:
+    if text.count(host_window_anchor) != 1:
+        raise SystemExit("could not uniquely locate game-controls UIWindow clear background")
+    text = text.replace(host_window_anchor, host_window_patch, 1)
+
+view_anchor = '        viewController.loadViewIfNeeded()\\n'
+view_patch = (
+    '        viewController.loadViewIfNeeded()\\n'
+    '        viewController.view.isOpaque = false\\n'
+)
+if view_patch not in text:
+    if text.count(view_anchor) != 1:
+        raise SystemExit("could not uniquely locate game-controls root view load")
+    text = text.replace(view_anchor, view_patch, 1)
+
+if 'controlsWindow.isOpaque = false' not in text or 'viewController.view.isOpaque = false' not in text:
+    raise SystemExit("transparent game-controls window patch did not apply")
+
 # SwiftUI glassEffect is unavailable before iOS 26. Preserve the existing
 # iOS 15+ material fallback unconditionally.
 extension_start = "private extension View {"
