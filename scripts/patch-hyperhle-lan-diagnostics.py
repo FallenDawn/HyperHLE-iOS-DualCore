@@ -17,54 +17,17 @@ source = swift_path.read_text()
 
 marker = "private enum HyperHLEDiagnosticsUploader {"
 
-uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
-    static let shared = HyperHLEBonjourDiscovery()
-    private var browser: NetServiceBrowser?
-    private var continuation: CheckedContinuation<String?, Never>?
-    private var timeoutWork: DispatchWorkItem?
-    func findReceiver() async -> String? {
-        await withCheckedContinuation { continuation in
-            self.continuation = continuation
-            let browser = NetServiceBrowser()
-            self.browser = browser
-            browser.delegate = self
-            browser.searchForServices(ofType: "_hyperhle-diag._tcp.", inDomain: "local.")
-            let timeout = DispatchWorkItem { [weak self] in self?.finish(nil) }
-            timeoutWork = timeout
-            DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: timeout)
-        }
-    }
-    func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
-        service.delegate = self
-        service.resolve(withTimeout: 3)
-    }
-    func netServiceDidResolveAddress(_ sender: NetService) {
-        guard let hostname = sender.hostName?.trimmingCharacters(in: CharacterSet(charactersIn: ".")),
-              !hostname.isEmpty, sender.port > 0 else { return }
-        finish("\(hostname):\(sender.port)")
-    }
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {}
-    private func finish(_ result: String?) {
-        guard let continuation else { return }
-        self.continuation = nil
-        timeoutWork?.cancel()
-        timeoutWork = nil
-        browser?.stop()
-        browser?.delegate = nil
-        browser = nil
-        continuation.resume(returning: result)
-    }
-}
-
-
-private enum HyperHLEDiagnosticsUploader {
+uploader = r'''private enum HyperHLEDiagnosticsUploader {
     private static let queueName = "HyperHLE-UploadQueue"
     private static let lastSnapshotKey = "hyperhleDiagnosticsLastSnapshot"
 
     static func uploadPending() async {
         let defaults = UserDefaults.standard
-        guard let host = await HyperHLEBonjourDiscovery.shared.findReceiver() else {
-            print("HyperHLE LAN diagnostics: no Windows receiver found on local network")
+        let host = defaults.string(forKey: "hyperhleDiagnosticsHost")?
+            .trimmingCharacters(in: .whitespacesAndNewlines) ?? ""
+        let portText = defaults.string(forKey: "hyperhleDiagnosticsPort") ?? "8765"
+        guard !host.isEmpty, let port = Int(portText), (1...65535).contains(port) else {
+            print("HyperHLE LAN diagnostics: configure a valid Windows receiver IP and port in Settings")
             return
         }
 
@@ -83,7 +46,7 @@ private enum HyperHLEDiagnosticsUploader {
         ))?.filter { $0.pathExtension.lowercased() == "zip" }.sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
 
         guard !files.isEmpty else { return }
-        guard let url = URL(string: "http://\(host)/upload") else { return }
+        guard let url = URL(string: "http://\(host):\(port)/upload") else { return }
 
         for file in files {
             do {
@@ -258,18 +221,43 @@ settings = settings.replace('''
     @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = ""
     @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""''', "")
 old_section = '''                Section {
-                    TextField("Windows PC IP (e.g. 192.168.1.20)", text: $diagnosticsHost)
+                    TextField("Windows PC IP", text: $diagnosticsHost)
                         .keyboardType(.URL)
                         .textInputAutocapitalization(.never)
                         .autocorrectionDisabled()
-                    SecureField("Upload token", text: $diagnosticsToken)
+                    TextField("Port", text: $diagnosticsPort)
+                        .keyboardType(.numberPad)
+                    Button("Test connection") {
+                        Task {
+                            let host = diagnosticsHost.trimmingCharacters(in: .whitespacesAndNewlines)
+                            let port = Int(diagnosticsPort) ?? 0
+                            guard !host.isEmpty, (1...65535).contains(port),
+                                  let url = URL(string: "http://\\(host):\\(port)/health") else {
+                                diagnosticsConnectionStatus = "Invalid IP or port"
+                                return
+                            }
+                            do {
+                                let (_, response) = try await URLSession.shared.data(from: url)
+                                if let http = response as? HTTPURLResponse, (200...299).contains(http.statusCode) {
+                                    diagnosticsConnectionStatus = "Connection successful"
+                                } else {
+                                    diagnosticsConnectionStatus = "Receiver did not return HTTP 200"
+                                }
+                            } catch {
+                                diagnosticsConnectionStatus = "Connection failed: \\(error.localizedDescription)"
+                            }
+                        }
+                    }
+                    if !diagnosticsConnectionStatus.isEmpty {
+                        Text(diagnosticsConnectionStatus).font(.footnote).foregroundStyle(.secondary)
+                    }
                     Button("Upload saved diagnostics now") {
                         Task { await HyperHLEDiagnosticsUploader.uploadPending() }
                     }
                 } header: {
                     Text("LAN Diagnostics")
                 } footer: {
-                    Text("Set the Windows receiver IP and token once. Logs upload automatically after a game exits and are retried on the next launch if the PC is unavailable. Port 8765 is used automatically.")
+                    Text("Enter the Windows PC IP and receiver port (default 8765). Logs are uploaded automatically after a game exits and retried when the app starts. The Windows receiver must be running on the same LAN.")
                 }
 '''
 new_section = '''                Section {
@@ -289,8 +277,8 @@ swift_path.write_text(source)
 
 plist = plistlib.loads(plist_path.read_bytes())
 plist["NSLocalNetworkUsageDescription"] = (
-    "HyperHLE discovers your Windows PC and sends emulator diagnostic logs on your local network."
+    "HyperHLE connects to your configured Windows PC and sends emulator diagnostic logs on your local network."
 )
-plist["NSBonjourServices"] = ["_hyperhle-diag._tcp"]
+plist.pop("NSBonjourServices", None)
 plist_path.write_bytes(plistlib.dumps(plist, fmt=plistlib.FMT_XML, sort_keys=False))
-print("patched: iOS LAN diagnostics queue, ZIP upload, retry triggers, Bonjour discovery, tokenless upload, and local-network privacy text")
+print("patched: iOS LAN diagnostics queue, ZIP upload, retry triggers, manual IP/port configuration and upload health check, and local-network privacy text")
