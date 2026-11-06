@@ -279,12 +279,13 @@ if marker not in source:
 elif "private enum HyperHLEDiagnosticsUploader {" not in source:
     raise SystemExit("unexpected uploader marker state")
 
-# Retry queued archives whenever the app returns to its library.
+# Start the app-level diagnostics service as soon as the iOS host launches.
 start_anchor = '''    @objc class func start() {
         shared.presentLibrary()
     }'''
 start_patch = '''    @objc class func start() {
         shared.presentLibrary()
+        HyperHLEDiagnosticsUploader.startLiveCapture()
         Task { await HyperHLEDiagnosticsUploader.uploadPending() }
     }'''
 if start_patch not in source:
@@ -310,15 +311,8 @@ if launch_patch not in source:
         raise SystemExit("could not patch live upload start before game launch")
     source = source.replace(launch_anchor, launch_patch, 1)
 
-live_return_anchor = '''                self.isLaunching = false
-                Task { await HyperHLEDiagnosticsUploader.uploadPending() }'''
-live_return_patch = '''                HyperHLEDiagnosticsUploader.stopLiveCapture()
-                self.isLaunching = false
-                Task { await HyperHLEDiagnosticsUploader.uploadPending() }'''
-if live_return_patch not in source:
-    if source.count(live_return_anchor) != 1:
-        raise SystemExit("could not patch live upload stop after game exit")
-    source = source.replace(live_return_anchor, live_return_patch, 1)
+# Keep the app-level diagnostics service alive when a game returns to the library.
+# Do not stop live capture here: the host must keep streaming logs on the library screen.
 
 # Add editable direct-IP settings and a real health-check action.
 settings_start = source.index("private struct SettingsView: View {")
@@ -381,7 +375,7 @@ settings_replacement = '''                Section("Controls") {
                 } header: {
                     Text("LAN Diagnostics")
                 } footer: {
-                    Text("Bonjour discovers the Windows receiver automatically. New log data is uploaded during gameplay every few seconds; failed uploads are queued and retried.")
+                    Text("Bonjour discovers the Windows receiver automatically. The diagnostics service starts with the app and uploads incremental log snapshots every few seconds on both the library screen and during gameplay; failed uploads are queued and retried.")
                 }
 
                 Section {
