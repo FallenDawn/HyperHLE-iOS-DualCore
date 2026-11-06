@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Add runtime diagnostics and an aggressive UIWindow-order test to SDL's iOS host."""
+"""Add UIKit-only presentation probe and EAGL present diagnostics to SDL iOS host."""
 from pathlib import Path
 import sys
 
@@ -12,14 +12,35 @@ gl_path = root / "src/video/uikit/SDL_uikitopenglview.m"
 window_source = window_path.read_text()
 gl_source = gl_path.read_text()
 
-# The pinned HyperHLE SDL host patch already adds this window-level/show pair.
-# Anchor to that real upstream-patched source rather than a diagnostic block
-# that is not present in the freshly patched SDL checkout.
+# This exact pair is introduced by the pinned v1.3.6 SDL host patch.
 window_anchor = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
+        [data.uiwindow makeKeyAndVisible];"""
+window_patch = """        // TEMPORARY BLACK-SCREEN ISOLATION TEST.
+        data.uiwindow.windowLevel = UIWindowLevelAlert + 1.0;
         [data.uiwindow makeKeyAndVisible];
 
-        // UIKit-only proof-of-presentation overlay. This bypasses EAGL, SDL
-        // swap, Core Animation layer contents, and guest rendering.
+        if (@available(iOS 13.0, tvOS 13.0, *)) {
+            UIWindowScene *scene = data.uiwindow.windowScene;
+            if (scene) {
+                for (UIWindow *candidate in scene.windows) {
+                    if (candidate != data.uiwindow &&
+                        ([candidate.accessibilityIdentifier isEqualToString:@"touchHLE.gameControls"] ||
+                         [NSStringFromClass([candidate class]) containsString:@"GameControls"])) {
+                        NSLog(@"iOS BLACKSCREEN TEST: hiding controls window=%@", candidate);
+                        candidate.hidden = YES;
+                        candidate.alpha = 0.0;
+                    }
+                }
+                NSLog(@"iOS BLACKSCREEN TEST: SDLWindow=%p scene=%p activation=%ld level=%.1f key=%d frame=%@",
+                      data.uiwindow, scene, (long)scene.activationState,
+                      data.uiwindow.windowLevel, data.uiwindow.isKeyWindow,
+                      NSStringFromCGRect(data.uiwindow.frame));
+            }
+        }
+
+        [data.uiwindow makeKeyAndVisible];
+
+        // UIKit-only proof-of-presentation overlay. It bypasses EAGL and SDL swap.
         UIView *touchHLEPresentationProbe = [[UIView alloc] initWithFrame:data.uiwindow.bounds];
         touchHLEPresentationProbe.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
         touchHLEPresentationProbe.backgroundColor = [UIColor colorWithRed:0.0 green:0.85 blue:0.15 alpha:1.0];
@@ -37,53 +58,16 @@ window_anchor = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0
         [data.uiwindow bringSubviewToFront:touchHLEPresentationProbe];
         NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe attached frame=%@ window=%p",
               NSStringFromCGRect(touchHLEPresentationProbe.frame), data.uiwindow);"""
-window_patch = """        // TEMPORARY AGGRESSIVE BLACK-SCREEN TEST:
-        // Raise SDL above normal/alert-level app overlays and hide the
-        // separate SwiftUI controls window for this diagnostic build.
-        data.uiwindow.windowLevel = UIWindowLevelAlert + 1.0;
-        [data.uiwindow makeKeyAndVisible];
 
-        if (@available(iOS 13.0, tvOS 13.0, *)) {
-            UIWindowScene *scene = data.uiwindow.windowScene;
-            if (scene) {
-                for (UIWindow *candidate in scene.windows) {
-                    if (candidate != data.uiwindow &&
-                        ([candidate.accessibilityIdentifier isEqualToString:@"touchHLE.gameControls"] ||
-                         [NSStringFromClass([candidate class]) containsString:@"GameControls"])) {
-                        NSLog(@"iOS BLACKSCREEN TEST: hiding controls window=%@ level=%.1f",
-                              candidate, candidate.windowLevel);
-                        candidate.hidden = YES;
-                        candidate.alpha = 0.0;
-                    }
-                }
-
-                NSLog(@"iOS BLACKSCREEN TEST: SDLWindow=%p scene=%p activation=%ld level=%.1f key=%d frame=%@",
-                      data.uiwindow, scene, (long)scene.activationState,
-                      data.uiwindow.windowLevel, data.uiwindow.isKeyWindow,
-                      NSStringFromCGRect(data.uiwindow.frame));
-                NSUInteger index = 0;
-                for (UIWindow *candidate in scene.windows) {
-                    UIView *rootView = candidate.rootViewController.viewIfLoaded;
-                    NSLog(@"iOS BLACKSCREEN TEST stack: index=%lu class=%@ hidden=%d alpha=%.3f level=%.1f key=%d root=%@",
-                          (unsigned long)index++, NSStringFromClass([candidate class]),
-                          candidate.hidden, candidate.alpha, candidate.windowLevel,
-                          candidate.isKeyWindow,
-                          candidate.rootViewController ? NSStringFromClass([candidate.rootViewController class]) : @"nil");
-                    (void)rootView;
-                }
-            }
-        }
-        [data.uiwindow makeKeyAndVisible];"""
-
-if "iOS BLACKSCREEN TEST: SDLWindow=" not in window_source:
+if "touchHLE.presentationProbe" not in window_source:
     count = window_source.count(window_anchor)
     if count != 1:
         raise SystemExit(f"SDL_uikitwindow.m: expected one upstream show-window anchor, found {count}")
     window_source = window_source.replace(window_anchor, window_patch, 1)
     window_path.write_text(window_source)
-    print("patched: aggressive SDL UIWindow ordering and controls-window suppression")
+    print("patched: UIKit-only presentation probe and SDL window diagnostics")
 else:
-    print("already patched: aggressive SDL UIWindow test")
+    print("already patched: UIKit-only presentation probe")
 
 gl_anchor = "    [context presentRenderbuffer:GL_RENDERBUFFER];"
 gl_patch = """    BOOL didPresent = [context presentRenderbuffer:GL_RENDERBUFFER];
