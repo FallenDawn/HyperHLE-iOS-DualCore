@@ -20,7 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - name: Syntax-check integration scripts
-        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-touchhle-ace-xi-movie.py scripts/patch-touchhle-eagl-diagnostics.py scripts/patch-touchhle-compositor-diagnostics.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py
+        run: python3 -m py_compile scripts/patch-touchhle-ios.py scripts/patch-touchhle-ace-xi-movie.py scripts/patch-touchhle-eagl-diagnostics.py scripts/patch-touchhle-compositor-diagnostics.py scripts/patch-hyperhle-build-rust.py scripts/patch-hyperhle-ios-ui.py scripts/patch-hyperhle-core-label.py scripts/patch-touchhle-dynarmic-ios15-jit.py scripts/patch-hyperhle-lan-diagnostics.py
       - name: Verify upstream refs
         run: bash scripts/verify-upstreams.sh
 
@@ -56,6 +56,8 @@ jobs:
         run: |
           python3 scripts/patch-hyperhle-ios-ui.py upstream/HyperHLE-Reborn/platform/ios/Sources/NativeHost.swift
           python3 scripts/patch-hyperhle-core-label.py upstream/HyperHLE-Reborn/platform/ios/Sources/EmulatorCore.swift
+          python3 scripts/patch-hyperhle-lan-diagnostics.py upstream/HyperHLE-Reborn/platform/ios/Sources/NativeHost.swift upstream/HyperHLE-Reborn/platform/ios/Config/Info.plist
+          /usr/libexec/PlistBuddy -c "Add :HYPERHLE_GIT_COMMIT string ${GITHUB_SHA}" upstream/HyperHLE-Reborn/platform/ios/Config/Info.plist
 
       - name: Select newest installed Xcode
         shell: bash
