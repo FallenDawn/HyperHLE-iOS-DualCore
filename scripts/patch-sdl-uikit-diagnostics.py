@@ -40,36 +40,10 @@ window_patch = """        // TEMPORARY BLACK-SCREEN ISOLATION TEST.
 
         [data.uiwindow makeKeyAndVisible];
 
-        // UIKit-only proof-of-presentation overlay. It bypasses EAGL and SDL swap.
-        UIView *touchHLEPresentationProbe = [[UIView alloc] initWithFrame:data.uiwindow.bounds];
-        touchHLEPresentationProbe.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        touchHLEPresentationProbe.backgroundColor = [UIColor colorWithRed:0.0 green:0.85 blue:0.15 alpha:1.0];
-        touchHLEPresentationProbe.userInteractionEnabled = NO;
-        touchHLEPresentationProbe.accessibilityIdentifier = @"touchHLE.presentationProbe";
-        UILabel *touchHLEPresentationLabel = [[UILabel alloc] initWithFrame:touchHLEPresentationProbe.bounds];
-        touchHLEPresentationLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
-        touchHLEPresentationLabel.text = @"UIKIT PRESENTATION OK\\nSDL WINDOW VISIBLE\\nEAGL PATH UNDER TEST";
-        touchHLEPresentationLabel.textColor = UIColor.blackColor;
-        touchHLEPresentationLabel.textAlignment = NSTextAlignmentCenter;
-        touchHLEPresentationLabel.numberOfLines = 0;
-        touchHLEPresentationLabel.font = [UIFont boldSystemFontOfSize:28.0];
-        [touchHLEPresentationProbe addSubview:touchHLEPresentationLabel];
-        [data.uiwindow addSubview:touchHLEPresentationProbe];
-        [data.uiwindow bringSubviewToFront:touchHLEPresentationProbe];
-        NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe attached frame=%@ window=%p; will reveal SDL/EAGL after 3 seconds",
-              NSStringFromCGRect(touchHLEPresentationProbe.frame), data.uiwindow);
-
-        // Reveal the real SDL/EAGL content after the UIKit-only path is proven.
-        // The diagnostic overlay is intentionally temporary and must not cover the game.
-        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
-                       dispatch_get_main_queue(), ^{
-            [UIView animateWithDuration:0.25 animations:^{
-                touchHLEPresentationProbe.alpha = 0.0;
-            } completion:^(BOOL finished) {
-                [touchHLEPresentationProbe removeFromSuperview];
-                NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe removed; SDL/EAGL content is now unobstructed");
-            }];
-        });"""
+        // Do not add a UIKit overlay here: the emulator can occupy the main
+        // thread, preventing dispatch_get_main_queue() timers from firing.
+        // Keep SDL/EAGL unobstructed from the moment the window is shown.
+        NSLog(@"iOS BLACKSCREEN TEST: UIKit probe disabled; SDL/EAGL presentation unobstructed");"""
 
 if "touchHLE.presentationProbe" not in window_source:
     count = window_source.count(window_anchor)
