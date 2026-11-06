@@ -16,7 +16,27 @@ gl_source = gl_path.read_text()
 # Anchor to that real upstream-patched source rather than a diagnostic block
 # that is not present in the freshly patched SDL checkout.
 window_anchor = """        data.uiwindow.windowLevel = UIWindowLevelNormal + 2.0;
-        [data.uiwindow makeKeyAndVisible];"""
+        [data.uiwindow makeKeyAndVisible];
+
+        // UIKit-only proof-of-presentation overlay. This bypasses EAGL, SDL
+        // swap, Core Animation layer contents, and guest rendering.
+        UIView *touchHLEPresentationProbe = [[UIView alloc] initWithFrame:data.uiwindow.bounds];
+        touchHLEPresentationProbe.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        touchHLEPresentationProbe.backgroundColor = [UIColor colorWithRed:0.0 green:0.85 blue:0.15 alpha:1.0];
+        touchHLEPresentationProbe.userInteractionEnabled = NO;
+        touchHLEPresentationProbe.accessibilityIdentifier = @"touchHLE.presentationProbe";
+        UILabel *touchHLEPresentationLabel = [[UILabel alloc] initWithFrame:touchHLEPresentationProbe.bounds];
+        touchHLEPresentationLabel.autoresizingMask = UIViewAutoresizingFlexibleWidth | UIViewAutoresizingFlexibleHeight;
+        touchHLEPresentationLabel.text = @"UIKIT PRESENTATION OK\\nSDL WINDOW VISIBLE\\nEAGL PATH UNDER TEST";
+        touchHLEPresentationLabel.textColor = UIColor.blackColor;
+        touchHLEPresentationLabel.textAlignment = NSTextAlignmentCenter;
+        touchHLEPresentationLabel.numberOfLines = 0;
+        touchHLEPresentationLabel.font = [UIFont boldSystemFontOfSize:28.0];
+        [touchHLEPresentationProbe addSubview:touchHLEPresentationLabel];
+        [data.uiwindow addSubview:touchHLEPresentationProbe];
+        [data.uiwindow bringSubviewToFront:touchHLEPresentationProbe];
+        NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe attached frame=%@ window=%p",
+              NSStringFromCGRect(touchHLEPresentationProbe.frame), data.uiwindow);"""
 window_patch = """        // TEMPORARY AGGRESSIVE BLACK-SCREEN TEST:
         // Raise SDL above normal/alert-level app overlays and hide the
         // separate SwiftUI controls window for this diagnostic build.
