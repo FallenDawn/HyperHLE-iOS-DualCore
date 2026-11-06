@@ -220,10 +220,14 @@ settings = source[settings_start:settings_end]
 settings = settings.replace('''
     @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = ""
     @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""''', "")
-settings = settings.replace("private struct SettingsView: View {", """private struct SettingsView: View {
-    @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = "192.168.1.138"
-    @AppStorage("hyperhleDiagnosticsPort") private var diagnosticsPort = "8765"
-    @State private var diagnosticsConnectionStatus = """"", 1)
+settings = settings.replace(
+    "private struct SettingsView: View {",
+    "private struct SettingsView: View {\\n"
+    '    @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = "192.168.1.138"\\n'
+    '    @AppStorage("hyperhleDiagnosticsPort") private var diagnosticsPort = "8765"\\n'
+    '    @State private var diagnosticsConnectionStatus = ""\\n',
+    1,
+)
 old_section = '''                Section {
                     TextField("Windows PC IP", text: $diagnosticsHost)
                         .keyboardType(.URL)
