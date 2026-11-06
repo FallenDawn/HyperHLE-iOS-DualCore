@@ -56,8 +56,20 @@ window_patch = """        // TEMPORARY BLACK-SCREEN ISOLATION TEST.
         [touchHLEPresentationProbe addSubview:touchHLEPresentationLabel];
         [data.uiwindow addSubview:touchHLEPresentationProbe];
         [data.uiwindow bringSubviewToFront:touchHLEPresentationProbe];
-        NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe attached frame=%@ window=%p",
-              NSStringFromCGRect(touchHLEPresentationProbe.frame), data.uiwindow);"""
+        NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe attached frame=%@ window=%p; will reveal SDL/EAGL after 3 seconds",
+              NSStringFromCGRect(touchHLEPresentationProbe.frame), data.uiwindow);
+
+        // Reveal the real SDL/EAGL content after the UIKit-only path is proven.
+        // The diagnostic overlay is intentionally temporary and must not cover the game.
+        dispatch_after(dispatch_time(DISPATCH_TIME_NOW, (int64_t)(3 * NSEC_PER_SEC)),
+                       dispatch_get_main_queue(), ^{
+            [UIView animateWithDuration:0.25 animations:^{
+                touchHLEPresentationProbe.alpha = 0.0;
+            } completion:^(BOOL finished) {
+                [touchHLEPresentationProbe removeFromSuperview];
+                NSLog(@"iOS BLACKSCREEN TEST: UIKit-only presentation probe removed; SDL/EAGL content is now unobstructed");
+            }];
+        });"""
 
 if "touchHLE.presentationProbe" not in window_source:
     count = window_source.count(window_anchor)
