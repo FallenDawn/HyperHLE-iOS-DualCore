@@ -15,12 +15,13 @@ if len(sys.argv) != 3:
 swift_path, plist_path = map(Path, sys.argv[1:])
 source = swift_path.read_text()
 
-marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
+marker = "private enum HyperHLEDiagnosticsUploader {"
+
+uploader = r'''private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrowserDelegate, NetServiceDelegate {
     static let shared = HyperHLEBonjourDiscovery()
     private var browser: NetServiceBrowser?
     private var continuation: CheckedContinuation<String?, Never>?
     private var timeoutWork: DispatchWorkItem?
-
     func findReceiver() async -> String? {
         await withCheckedContinuation { continuation in
             self.continuation = continuation
@@ -33,22 +34,16 @@ marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrow
             DispatchQueue.main.asyncAfter(deadline: .now() + 4, execute: timeout)
         }
     }
-
     func netServiceBrowser(_ browser: NetServiceBrowser, didFind service: NetService, moreComing: Bool) {
         service.delegate = self
         service.resolve(withTimeout: 3)
     }
-
     func netServiceDidResolveAddress(_ sender: NetService) {
         guard let hostname = sender.hostName?.trimmingCharacters(in: CharacterSet(charactersIn: ".")),
               !hostname.isEmpty, sender.port > 0 else { return }
         finish("\\(hostname):\\(sender.port)")
     }
-
-    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {
-        // Keep browsing until the discovery timeout.
-    }
-
+    func netService(_ sender: NetService, didNotResolve errorDict: [String : NSNumber]) {}
     private func finish(_ result: String?) {
         guard let continuation else { return }
         self.continuation = nil
@@ -61,13 +56,13 @@ marker = "private final class HyperHLEBonjourDiscovery: NSObject, NetServiceBrow
     }
 }
 
-private enum HyperHLEDiagnosticsUploader {"
-uploader = r'''
+
 private enum HyperHLEDiagnosticsUploader {
     private static let queueName = "HyperHLE-UploadQueue"
     private static let lastSnapshotKey = "hyperhleDiagnosticsLastSnapshot"
 
     static func uploadPending() async {
+        let defaults = UserDefaults.standard
         guard let host = await HyperHLEBonjourDiscovery.shared.findReceiver() else {
             print("HyperHLE LAN diagnostics: no Windows receiver found on local network")
             return
@@ -88,10 +83,7 @@ private enum HyperHLEDiagnosticsUploader {
         ))?.filter { $0.pathExtension.lowercased() == "zip" }.sorted { $0.lastPathComponent < $1.lastPathComponent } ?? []
 
         guard !files.isEmpty else { return }
-        guard var components = URLComponents(string: host.contains("://") ? host : "http://\(host)") else { return }
-        if components.port == nil { components.port = 8765 }
-        components.path = "/upload"
-        guard let url = components.url else { return }
+        guard let url = URL(string: "http://\\(host)/upload") else { return }
 
         for file in files {
             do {
