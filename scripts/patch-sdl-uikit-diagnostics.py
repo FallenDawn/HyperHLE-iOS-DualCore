@@ -22,9 +22,6 @@ window_patch = """        // Keep SDL at the normal application window level.
         if (@available(iOS 13.0, tvOS 13.0, *)) {
             UIWindowScene *scene = data.uiwindow.windowScene;
             if (scene) {
-                for (UIWindow *candidate in scene.windows) {
-                }
-                }
                 NSLog(@"iOS UIKit diagnostics: SDLWindow=%p scene=%p activation=%ld level=%.1f key=%d frame=%@",
                       data.uiwindow, scene, (long)scene.activationState,
                       data.uiwindow.windowLevel, data.uiwindow.isKeyWindow,
@@ -66,7 +63,7 @@ window_patch = """        // Keep SDL at the normal application window level.
         // Do not add a UIKit overlay here: the emulator can occupy the main
         // thread, preventing dispatch_get_main_queue() timers from firing.
         // Keep SDL/EAGL unobstructed from the moment the window is shown.
-        NSLog(@"iOS BLACKSCREEN TEST: UIKit probe disabled; SDL/EAGL presentation unobstructed");"""
+        NSLog(@"iOS UIKit diagnostics: no overlay; SDL/EAGL presentation unobstructed");"""
 
 if "touchHLE.presentationProbe" not in window_source:
     count = window_source.count(window_anchor)
