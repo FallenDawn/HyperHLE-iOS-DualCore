@@ -284,10 +284,22 @@ replace_once(
                 .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
                 .count();
             let alpha_nonzero = pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+            let mut min_rgb = [u8::MAX; 3];
+            let mut max_rgb = [u8::MIN; 3];
+            let mut colors = std::collections::HashSet::<u16>::new();
+            let mut hash: u64 = 0xcbf29ce484222325;
+            for p in pixels.chunks_exact(4) {
+                for channel in 0..3 {
+                    min_rgb[channel] = min_rgb[channel].min(p[channel]);
+                    max_rgb[channel] = max_rgb[channel].max(p[channel]);
+                }
+                colors.insert(((p[0] as u16 >> 3) << 10) | ((p[1] as u16 >> 3) << 5) | (p[2] as u16 >> 3));
+                for byte in &p[..3] { hash = (hash ^ *byte as u64).wrapping_mul(0x100000001b3); }
+            }
             let gl_error = unsafe { gles.GetError() };
-            log!("iOS compositor readback: stage=composition_fbo frame={} size={}x{} non_black={}/{} alpha_nonzero={}/{} gl_error=0x{:x}",
+            log!("iOS compositor readback: stage=composition_fbo frame={} size={}x{} non_black={}/{} alpha_nonzero={}/{} unique_rgb555={} min_rgb={:?} max_rgb={:?} fnv64={:016x} gl_error=0x{:x}",
                 frame, fb_width, fb_height, non_black, fb_width as usize * fb_height as usize,
-                alpha_nonzero, fb_width as usize * fb_height as usize, gl_error);
+                alpha_nonzero, fb_width as usize * fb_height as usize, colors.len(), min_rgb, max_rgb, hash, gl_error);
         }
     }
 
@@ -320,10 +332,22 @@ replace_once(
                 .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
                 .count();
             let alpha_nonzero = pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+            let mut min_rgb = [u8::MAX; 3];
+            let mut max_rgb = [u8::MIN; 3];
+            let mut colors = std::collections::HashSet::<u16>::new();
+            let mut hash: u64 = 0xcbf29ce484222325;
+            for p in pixels.chunks_exact(4) {
+                for channel in 0..3 {
+                    min_rgb[channel] = min_rgb[channel].min(p[channel]);
+                    max_rgb[channel] = max_rgb[channel].max(p[channel]);
+                }
+                colors.insert(((p[0] as u16 >> 3) << 10) | ((p[1] as u16 >> 3) << 5) | (p[2] as u16 >> 3));
+                for byte in &p[..3] { hash = (hash ^ *byte as u64).wrapping_mul(0x100000001b3); }
+            }
             let gl_error = unsafe { gles.GetError() };
-            log!("iOS compositor readback: stage=sdl_default_framebuffer frame={} viewport=({}, {}, {}, {}) non_black={}/{} alpha_nonzero={}/{} gl_error=0x{:x}",
+            log!("iOS compositor readback: stage=sdl_default_framebuffer frame={} viewport=({}, {}, {}, {}) non_black={}/{} alpha_nonzero={}/{} unique_rgb555={} min_rgb={:?} max_rgb={:?} fnv64={:016x} gl_error=0x{:x}",
                 frame, vx, vy, vw, vh, non_black, vw as usize * vh as usize,
-                alpha_nonzero, vw as usize * vh as usize, gl_error);
+                alpha_nonzero, vw as usize * vh as usize, colors.len(), min_rgb, max_rgb, hash, gl_error);
         }
     }
     std::mem::drop(gles);
