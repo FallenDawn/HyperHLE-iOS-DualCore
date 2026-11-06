@@ -222,10 +222,10 @@ settings = settings.replace('''
     @AppStorage("hyperhleDiagnosticsToken") private var diagnosticsToken = ""''', "")
 settings = settings.replace(
     "private struct SettingsView: View {",
-    "private struct SettingsView: View {\\n"
-    '    @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = "192.168.1.138"\\n'
-    '    @AppStorage("hyperhleDiagnosticsPort") private var diagnosticsPort = "8765"\\n'
-    '    @State private var diagnosticsConnectionStatus = ""\\n',
+    "private struct SettingsView: View {\n"
+    '    @AppStorage("hyperhleDiagnosticsHost") private var diagnosticsHost = "192.168.1.138"\n'
+    '    @AppStorage("hyperhleDiagnosticsPort") private var diagnosticsPort = "8765"\n'
+    '    @State private var diagnosticsConnectionStatus = ""\n',
     1,
 )
 old_section = '''                Section {
