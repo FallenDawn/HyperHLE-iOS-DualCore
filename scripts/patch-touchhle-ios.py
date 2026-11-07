@@ -336,5 +336,35 @@ fn get_bundled_resources_path() -> Option<PathBuf> {
         "AudioUnit PCM callback diagnostics",
     )
 
+    # Trace the final OpenAL hand-off without changing queue/play behavior.
+    replace_once(
+        "src/frameworks/audio_toolbox/audio_unit.rs",
+        """        context.SourceQueueBuffers(al_source, 1, &al_buffer);
+
+        let mut al_source_state = 0;
+        context.GetSourcei(al_source, AL_SOURCE_STATE, &mut al_source_state);
+        if al_source_state != AL_PLAYING {
+            context.SourcePlay(al_source);
+        }""",
+        """        context.SourceQueueBuffers(al_source, 1, &al_buffer);
+
+        let mut al_source_state = 0;
+        context.GetSourcei(al_source, AL_SOURCE_STATE, &mut al_source_state);
+        if al_source_state != AL_PLAYING {
+            context.SourcePlay(al_source);
+        }
+        #[cfg(target_os = "ios")]
+        {
+            use std::sync::atomic::{AtomicU64, Ordering};
+            static OPENAL_HANDOFF_LOG_COUNT: AtomicU64 = AtomicU64::new(0);
+            let frame = OPENAL_HANDOFF_LOG_COUNT.fetch_add(1, Ordering::Relaxed) + 1;
+            if frame <= 10 || frame % 120 == 0 {
+                log!("iOS audio diagnostic: OpenAL handoff frame={} source={} buffer={} queued_bytes={} source_state={}",
+                    frame, al_source, al_buffer, processed_data.len(), al_source_state);
+            }
+        }""",
+        "OpenAL queue and playback handoff diagnostics",
+    )
+
 if __name__ == "__main__":
     main()

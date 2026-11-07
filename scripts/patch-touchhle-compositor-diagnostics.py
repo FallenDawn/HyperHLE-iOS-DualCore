@@ -284,10 +284,22 @@ replace_once(
                 .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
                 .count();
             let alpha_nonzero = pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+            let mut min_rgb = [u8::MAX; 3];
+            let mut max_rgb = [u8::MIN; 3];
+            let mut colors = std::collections::HashSet::<u16>::new();
+            let mut hash: u64 = 0xcbf29ce484222325;
+            for p in pixels.chunks_exact(4) {
+                for channel in 0..3 {
+                    min_rgb[channel] = min_rgb[channel].min(p[channel]);
+                    max_rgb[channel] = max_rgb[channel].max(p[channel]);
+                }
+                colors.insert(((p[0] as u16 >> 3) << 10) | ((p[1] as u16 >> 3) << 5) | (p[2] as u16 >> 3));
+                for byte in &p[..3] { hash = (hash ^ *byte as u64).wrapping_mul(0x100000001b3); }
+            }
             let gl_error = unsafe { gles.GetError() };
-            log!("iOS compositor readback: stage=composition_fbo frame={} size={}x{} non_black={}/{} alpha_nonzero={}/{} gl_error=0x{:x}",
+            log!("iOS compositor readback: stage=composition_fbo frame={} size={}x{} non_black={}/{} alpha_nonzero={}/{} unique_rgb555={} min_rgb={:?} max_rgb={:?} fnv64={:016x} gl_error=0x{:x}",
                 frame, fb_width, fb_height, non_black, fb_width as usize * fb_height as usize,
-                alpha_nonzero, fb_width as usize * fb_height as usize, gl_error);
+                alpha_nonzero, fb_width as usize * fb_height as usize, colors.len(), min_rgb, max_rgb, hash, gl_error);
         }
     }
 
@@ -320,10 +332,22 @@ replace_once(
                 .filter(|p| p[0] != 0 || p[1] != 0 || p[2] != 0)
                 .count();
             let alpha_nonzero = pixels.chunks_exact(4).filter(|p| p[3] != 0).count();
+            let mut min_rgb = [u8::MAX; 3];
+            let mut max_rgb = [u8::MIN; 3];
+            let mut colors = std::collections::HashSet::<u16>::new();
+            let mut hash: u64 = 0xcbf29ce484222325;
+            for p in pixels.chunks_exact(4) {
+                for channel in 0..3 {
+                    min_rgb[channel] = min_rgb[channel].min(p[channel]);
+                    max_rgb[channel] = max_rgb[channel].max(p[channel]);
+                }
+                colors.insert(((p[0] as u16 >> 3) << 10) | ((p[1] as u16 >> 3) << 5) | (p[2] as u16 >> 3));
+                for byte in &p[..3] { hash = (hash ^ *byte as u64).wrapping_mul(0x100000001b3); }
+            }
             let gl_error = unsafe { gles.GetError() };
-            log!("iOS compositor readback: stage=sdl_default_framebuffer frame={} viewport=({}, {}, {}, {}) non_black={}/{} alpha_nonzero={}/{} gl_error=0x{:x}",
+            log!("iOS compositor readback: stage=sdl_default_framebuffer frame={} viewport=({}, {}, {}, {}) non_black={}/{} alpha_nonzero={}/{} unique_rgb555={} min_rgb={:?} max_rgb={:?} fnv64={:016x} gl_error=0x{:x}",
                 frame, vx, vy, vw, vh, non_black, vw as usize * vh as usize,
-                alpha_nonzero, vw as usize * vh as usize, gl_error);
+                alpha_nonzero, vw as usize * vh as usize, colors.len(), min_rgb, max_rgb, hash, gl_error);
         }
     }
     std::mem::drop(gles);
@@ -370,3 +394,19 @@ else:
     window_source = window_source.replace(window_anchor, window_replacement, 1)
     window_path.write_text(window_source)
     print("patched: iOS drawable-sized viewport")
+
+
+# Search all visible descendants for the full-screen EAGL drawable instead
+# of following only the last sublayer at every level.
+eagl_path = core / "src/frameworks/core_animation/ca_eagl_layer.rs"
+eagl_source = eagl_path.read_text()
+old_fn = "pub fn find_fullscreen_eagl_layer(env: &mut Environment) -> id {\n    if env.options.force_composition {\n        return nil;\n    }\n\n    let windows = env.framework_state.uikit.ui_view.ui_window.windows.clone();\n    // Assumes the windows in the list are ordered back-to-front.\n    // TODO: this may not be correct once we support windowLevel.\n    let Some(top_window) = windows\n        .into_iter()\n        .rev()\n        .find(|&window| !msg![env; window isHidden])\n    else {\n        return nil;\n    };\n\n    let screen_bounds: CGRect = {\n        let screen: id = msg_class![env; UIScreen mainScreen];\n        msg![env; screen bounds]\n    };\n\n    let mut layer: id = msg![env; top_window layer];\n\n    // Descend through the hierarchy, looking only at the last layer in each\n    // list of children, since that should be the one on top.\n    // TODO: this is not correct once we support zPosition.\n    loop {\n        assert!(layer != nil);\n\n        let layer_host_obj: &CALayerHostObject = env.objc.borrow(layer);\n\n        // This is stricter than it should be. In theory we should accumulate\n        // the transforms and handle different anchor points etc, but real apps\n        // probably only use this common case.\n        if layer_host_obj.bounds.size != screen_bounds.size\n            || layer_host_obj.bounds.origin != (CGPoint { x: 0.0, y: 0.0 })\n            || layer_host_obj.anchor_point != (CGPoint { x: 0.5, y: 0.5 })\n            || layer_host_obj.position\n                != (CGPoint {\n                    x: screen_bounds.size.width / 2.0,\n                    y: screen_bounds.size.height / 2.0,\n                })\n            || layer_host_obj.hidden\n            || layer_host_obj.opacity != 1.0\n            // TODO: support affine transforms that result in a full-screen\n            //       layer (typical example is 90° rotation).\n            || !layer_host_obj.affine_transform.is_identity()\n        {\n            return nil;\n        }\n\n        if let Some(&next) = layer_host_obj.sublayers.last() {\n            layer = next;\n        } else {\n            break;\n        }\n    }\n\n    if !env.objc.borrow::<CALayerHostObject>(layer).opaque {\n        return nil;\n    }\n\n    let ca_eagl_layer_class: Class = msg_class![env; CAEAGLLayer class];\n    if !msg![env; layer isKindOfClass:ca_eagl_layer_class] {\n        return nil;\n    }\n\n    layer\n}"
+new_fn = "pub fn find_fullscreen_eagl_layer(env: &mut Environment) -> id {\n    if env.options.force_composition {\n        return nil;\n    }\n\n    let windows = env.framework_state.uikit.ui_view.ui_window.windows.clone();\n    let Some(top_window) = windows\n        .into_iter()\n        .rev()\n        .find(|&window| !msg![env; window isHidden])\n    else {\n        return nil;\n    };\n\n    let screen_bounds: CGRect = {\n        let screen: id = msg_class![env; UIScreen mainScreen];\n        msg![env; screen bounds]\n    };\n    let ca_eagl_layer_class: Class = msg_class![env; CAEAGLLayer class];\n    let root_layer: id = msg![env; top_window layer];\n\n    fn search_visible_tree(\n        env: &mut Environment,\n        layer: id,\n        screen_bounds: CGRect,\n        ca_eagl_layer_class: Class,\n    ) -> id {\n        if layer == nil {\n            return nil;\n        }\n\n        let (hidden, bounds, anchor_point, position, opacity, affine_identity, opaque, children) = {\n            let host: &CALayerHostObject = env.objc.borrow(layer);\n            (\n                host.hidden,\n                host.bounds,\n                host.anchor_point,\n                host.position,\n                host.opacity,\n                host.affine_transform.is_identity(),\n                host.opaque,\n                host.sublayers.clone(),\n            )\n        };\n        if hidden {\n            return nil;\n        }\n\n        let is_eagl: bool = msg![env; layer isKindOfClass:ca_eagl_layer_class];\n        if is_eagl\n            && opaque\n            && opacity == 1.0\n            && bounds.size == screen_bounds.size\n            && bounds.origin == (CGPoint { x: 0.0, y: 0.0 })\n            && anchor_point == (CGPoint { x: 0.5, y: 0.5 })\n            && position == (CGPoint {\n                x: screen_bounds.size.width / 2.0,\n                y: screen_bounds.size.height / 2.0,\n            })\n            && affine_identity\n        {\n            return layer;\n        }\n\n        // Search front-most visible descendants first. Wrapper layers no\n        // longer hide the actual full-screen EAGL drawable from the detector.\n        for child in children.into_iter().rev() {\n            let found = search_visible_tree(env, child, screen_bounds, ca_eagl_layer_class);\n            if found != nil {\n                return found;\n            }\n        }\n        nil\n    }\n\n    search_visible_tree(env, root_layer, screen_bounds, ca_eagl_layer_class)\n}"
+if old_fn in eagl_source:
+    eagl_source = eagl_source.replace(old_fn, new_fn, 1)
+    eagl_path.write_text(eagl_source)
+    print("patched: recursive full-screen CAEAGLLayer fast-path detection")
+elif new_fn in eagl_source:
+    print("already patched: recursive full-screen CAEAGLLayer fast-path detection")
+else:
+    raise SystemExit("full-screen CAEAGLLayer detector anchor not found")

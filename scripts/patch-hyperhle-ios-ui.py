@@ -18,6 +18,56 @@ if button_count not in (0, 2):
     )
 text = text.replace("configuration = .glass()", "configuration = .gray()")
 
+# The game controls are hosted in a higher-level UIWindow above SDL. A clear
+# background alone is insufficient: UIWindow inherits UIView's opaque default,
+# which can composite the overlay as black and hide the SDL game window beneath.
+host_window_anchor = '        controlsWindow.backgroundColor = .clear\n'
+host_window_patch = (
+    '        controlsWindow.backgroundColor = .clear\n'
+    '        controlsWindow.isOpaque = false\n'
+)
+if host_window_patch not in text:
+    if text.count(host_window_anchor) != 1:
+        raise SystemExit("could not uniquely locate game-controls UIWindow clear background")
+    text = text.replace(host_window_anchor, host_window_patch, 1)
+
+view_anchor = '        viewController.loadViewIfNeeded()\n'
+view_patch = (
+    '        viewController.loadViewIfNeeded()\n'
+    '        viewController.view.isOpaque = false\n'
+)
+if view_patch not in text:
+    if text.count(view_anchor) != 1:
+        raise SystemExit("could not uniquely locate game-controls root view load")
+    text = text.replace(view_anchor, view_patch, 1)
+
+if 'controlsWindow.isOpaque = false' not in text or 'viewController.view.isOpaque = false' not in text:
+    raise SystemExit("transparent game-controls window patch did not apply")
+
+# Capture the actual UIKit window stack while the game is on screen. The
+# renderer diagnostics already prove that EAGL and SDL have non-black pixels;
+# this identifies whether SDL's UIWindow is hidden, covered, transparent, or
+# below the controls overlay at the final presentation boundary.
+window_anchor = '        gameControlsWindow = controlsWindow\n'
+window_patch = (
+    '        gameControlsWindow = controlsWindow\n'
+    '        for (index, candidate) in windowScene.windows.enumerated() {\n'
+    '            let rootName = candidate.rootViewController.map { String(describing: type(of: $0)) } ?? "nil"\n'
+    '            let viewState: String\n'
+    '            if let rootView = candidate.rootViewController?.viewIfLoaded {\n'
+    '                viewState = "rootViewHidden=\\(rootView.isHidden) rootViewAlpha=\\(rootView.alpha) rootViewOpaque=\\(rootView.isOpaque) rootViewBackground=\\(String(describing: rootView.backgroundColor))"\n'
+    '            } else {\n'
+    '                viewState = "rootView=not-loaded"\n'
+    '            }\n'
+    '            NSLog("iOS window diagnostic: index=\\(index) class=\\(type(of: candidate)) hidden=\\(candidate.isHidden) alpha=\\(candidate.alpha) opaque=\\(candidate.isOpaque) level=\\(candidate.windowLevel.rawValue) key=\\(candidate.isKeyWindow) frame=\\(NSCoder.string(for: candidate.frame)) root=\\(rootName) layerHidden=\\(candidate.layer.isHidden) layerOpacity=\\(candidate.layer.opacity) \\(viewState)")\n'
+    '        }\n'
+)
+if window_patch not in text:
+    if text.count(window_anchor) != 1:
+        raise SystemExit("could not uniquely locate game-controls window registration")
+    text = text.replace(window_anchor, window_patch, 1)
+
+
 # SwiftUI glassEffect is unavailable before iOS 26. Preserve the existing
 # iOS 15+ material fallback unconditionally.
 extension_start = "private extension View {"
