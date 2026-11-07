@@ -15,15 +15,21 @@ new = '''    // ACE-Xi repeatedly requests an unsupported intro movie. Its GL su
     // Keep the upstream one-second behavior for every other application.
     let content_url = env.objc.borrow::<MPMoviePlayerControllerHostObject>(this).content_url;
     let movie_path = ns_url::to_rust_path(env, content_url);
-    let is_ace_xi_movie =
-        format!("{:?}", movie_path).contains("updata-movie-ACEOP.mp4");
+    let movie_path_debug = format!("{:?}", movie_path);
+    let movie_path_lower = movie_path_debug.to_ascii_lowercase();
+    // Log every requested movie once through this code path. The previous
+    // exact-case Debug-string match silently missed paths when URL/path
+    // formatting or filename case differed, leaving ACE-Xi on a black movie
+    // surface indefinitely.
+    log!("MoviePlayer diagnostic: requested movie path={}", movie_path_debug);
+    let is_ace_xi_movie = movie_path_lower.contains("updata-movie-aceop.mp4");
     let playback_delay = if is_ace_xi_movie {
         Duration::from_millis(100)
     } else {
         Duration::from_millis(1000)
     };
     if is_ace_xi_movie {
-        log!("ACE-Xi compatibility: fast-forwarding unsupported movie playback");
+        log!("ACE-Xi compatibility: fast-forwarding unsupported movie playback after 100 ms");
     }
     let notif = (
         MPMoviePlayerPlaybackDidFinishNotification,
