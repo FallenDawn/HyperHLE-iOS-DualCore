@@ -142,7 +142,7 @@ jobs:
           python3 scripts/patch-touchhle-compositor-diagnostics.py
           grep -q 'dynamic-sdl = ' upstream/touchHLE/Cargo.toml
           grep -q 'touchhle_ios_run_game' upstream/touchHLE/platform/ios/rust-entry/src/lib.rs
-          grep -q 'ACE-Xi compatibility: fast-forwarding unsupported movie playback' upstream/touchHLE/src/frameworks/media_player/movie_player.rs
+          grep -q 'MoviePlayer compatibility: skipping unsupported video playback' upstream/touchHLE/src/frameworks/media_player/movie_player.rs
           grep -q 'USER_OPTIONS_FILE: &str = "touchHLE_options_coreb.txt"' upstream/touchHLE/src/paths.rs
           grep -q 'iOS EAGL diagnostic: present' upstream/touchHLE/src/frameworks/opengles/eagl.rs
           grep -q 'iOS compositor diagnostic: SDL window swap completed' upstream/touchHLE/src/frameworks/core_animation/composition.rs
